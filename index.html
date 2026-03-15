@@ -459,7 +459,7 @@
       </footer>      
 
       <div id="updateBanner" style="display:none; position:fixed; left:0; right:0; bottom:0; background:#111827; color:#ffffff; padding:10px 12px; z-index:9999; font-family:Arial, Helvetica, sans-serif; text-align:left">
-        <span>Update available.</span>
+        <span id="updateBannerText">Update available.</span>
         <button id="btnReloadUpdate" style="margin-left:12px; background:#F97316; color:#111827; border:none; border-radius:10px; padding:6px 10px; cursor:pointer">Reload</button>
         <button id="btnDismissUpdate" style="margin-left:8px; background:transparent; color:#ffffff; border:1px solid #ffffff; border-radius:10px; padding:6px 10px; cursor:pointer">Later</button>
       </div>
@@ -470,6 +470,7 @@
             let pendingReload = false;
             let waitingWorker = null;
             const banner = document.getElementById("updateBanner");
+            const bannerText = document.getElementById("updateBannerText");
             const btnReload = document.getElementById("btnReloadUpdate");
             const btnDismiss = document.getElementById("btnDismissUpdate");
 
@@ -486,7 +487,22 @@
             if (btnReload) {
               btnReload.addEventListener("click", () => {
                 pendingReload = true;
+                if (bannerText) bannerText.textContent = "Updating…";
+                if (btnReload) {
+                  btnReload.disabled = true;
+                  btnReload.textContent = "Reloading…";
+                  btnReload.style.opacity = "0.8";
+                  btnReload.style.cursor = "default";
+                }
+                if (btnDismiss) {
+                  btnDismiss.disabled = true;
+                  btnDismiss.style.opacity = "0.6";
+                  btnDismiss.style.cursor = "default";
+                }
                 if (waitingWorker) waitingWorker.postMessage("SKIP_WAITING");
+                setTimeout(() => {
+                  if (pendingReload) window.location.reload();
+                }, 1500);
               });
             }
 
