@@ -113,7 +113,7 @@
           <p class="w3-medium w3-left-align" style="position:absolute; left:45px; top:350px; color:white">Friction & Shear:</p>
           <!-- Show -->
           <p class="w3-medium w3-left-align" id="lblBMI" style="position:absolute; left:714px; top:68px; color:white">20</p>
-          <p class="w3-large w3-left-align" id="lblBradenScore" style="position:absolute; left:320px; top:397px; color:white">10</p>
+          <p class="w3-large w3-left-align" id="lblBradenScoreUser" style="position:absolute; left:320px; top:397px; color:white">10</p>
           <!-- Control -->
           <button id="btnSaveUserInfoAndReturn" onclick="setSaveUserInfoAndReturn()" class="animatedButton w3-small" style="position:absolute; left: 600px; top:6px">Save and Return</button>
           <input type="text" class="oneLineText" id="taName" name="taName" style="left:80px; top:38px; width:300px;" placeholder="Your Name">
@@ -233,7 +233,7 @@
           <pre><p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:412px; color:white">Turning:  Turn at a Step Angle of       degrees until the set Turn Angle,</p></pre>
           <pre><p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:432px; color:white">and stay for       minutes, then turn Flat for       minutes; and repeat.</p></pre>
           <!-- Show -->
-          <p class="w3-large w3-left-align" id="lblBradenScore" style="position:absolute; left:132px; top:36px; color:white">20</p>
+          <p class="w3-large w3-left-align" id="lblBradenScorePRS" style="position:absolute; left:132px; top:36px; color:white">20</p>
           <p class="w3-large w3-left-align" id="lblShear" style="position:absolute; left:314px; top:36px; color:white">2</p>
           <p class="w3-large w3-left-align" id="lblMobility" style="position:absolute; left:486px; top:36px; color:white">2</p>
           <!-- Control -->
@@ -279,11 +279,10 @@
                 <option value="5">Autofirm</option>
             </select>
           </div>
-          <!-- Note for image button, onclick does not work, use onmousedown instead! -->
-          <button type="image" id="bedIcon" class="icon bedButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_snb_50x45.jpg" alt="bed icon"> </button>
-          <button type="image" id="airmattressIcon" class="icon airmattressButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_airmattress_50x45.jpg" alt="air mattress icon"> </button>
-          <button type="image" id="pressuremapIcon" class="icon pressuremapButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_pressure_50x45.jpg" alt="pressure map icon"> </button>
-          <button type="image" id="settingIcon" class="icon settingButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_setting_50x45.jpg" alt="setting icon"> </button>
+          <button type="button" id="bedIcon" class="icon bedButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_snb_50x45.jpg" alt="bed icon" draggable="false"> </button>
+          <button type="button" id="airmattressIcon" class="icon airmattressButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_airmattress_50x45.jpg" alt="air mattress icon" draggable="false"> </button>
+          <button type="button" id="pressuremapIcon" class="icon pressuremapButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_pressure_50x45.jpg" alt="pressure map icon" draggable="false"> </button>
+          <button type="button" id="settingIcon" class="icon settingButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_setting_50x45.jpg" alt="setting icon" draggable="false"> </button>
           <p id="pressureReleaseActionMsg" class="w3-medium w3-left-align setVisibility" style="position:absolute; left:350px; top:12px">Pressure relief in 15 minutes</p>
           
           <div class="groupcard">

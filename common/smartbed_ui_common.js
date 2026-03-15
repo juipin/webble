@@ -89,7 +89,7 @@
     setValue("taDurationInFlatPosition", fields.durationInFlatPosition);
     setValue("taDurationAlternating", fields.durationAlternating);
 
-    setText("lblBradenScore", fields.bradenScore);
+    setText("lblBradenScorePRS", fields.bradenScore);
     setText("lblShear", fields.shear);
     setText("lblMobility", fields.mobility);
   };
@@ -151,6 +151,22 @@
       setting: byId("settingIcon"),
     };
 
+    const tabIds = [
+      connectButtonId,
+      hasAllBeds ? allbedsButtonId : null,
+      "bedButton",
+      "airmattressButton",
+      "pressuremapButton",
+      "settingButton",
+    ].filter(Boolean);
+
+    const setActiveTab = (activeId) => {
+      tabIds.forEach((id) => {
+        document.querySelectorAll(`[id="${id}"]`).forEach((el) => el.classList.remove("w3-white"));
+      });
+      document.querySelectorAll(`[id="${activeId}"]`).forEach((el) => el.classList.add("w3-white"));
+    };
+
     const stopPvsTimer = () => {
       if (window.timerPVS) clearInterval(window.timerPVS);
       window.timerPVS = null;
@@ -184,6 +200,11 @@
         hideAllMainScreens();
         setDisplay(containers.connect, "block");
         setDisplay(containers.background, "none");
+        setActiveTab(connectButtonId);
+        setSelected(icons.bed, false);
+        setSelected(icons.airmattress, false);
+        setSelected(icons.pressuremap, false);
+        setSelected(icons.setting, false);
         try {
           send("#SCREEN0");
         } catch (_) {}
@@ -194,6 +215,11 @@
         stopPvsTimer();
         hideAllMainScreens();
         setDisplay(containers.allbeds, "block");
+        setActiveTab(allbedsButtonId);
+        setSelected(icons.bed, false);
+        setSelected(icons.airmattress, false);
+        setSelected(icons.pressuremap, false);
+        setSelected(icons.setting, false);
         return;
       }
 
@@ -202,6 +228,7 @@
         hideAllMainScreens();
         setDisplay(containers.background, "block");
         setDisplay(containers.bed, "block");
+        setActiveTab("bedButton");
         setSelected(icons.bed, true);
         setSelected(icons.airmattress, false);
         setSelected(icons.pressuremap, false);
@@ -216,6 +243,7 @@
         hideAllMainScreens();
         setDisplay(containers.background, "block");
         setDisplay(containers.airmattress, "block");
+        setActiveTab("airmattressButton");
         setSelected(icons.bed, false);
         setSelected(icons.airmattress, true);
         setSelected(icons.pressuremap, false);
@@ -232,6 +260,7 @@
         hideAllMainScreens();
         setDisplay(containers.background, "block");
         setDisplay(containers.pressuremap, "block");
+        setActiveTab("pressuremapButton");
         setSelected(icons.bed, false);
         setSelected(icons.airmattress, false);
         setSelected(icons.pressuremap, true);
@@ -255,6 +284,7 @@
         hideAllMainScreens();
         setDisplay(containers.background, "block");
         setDisplay(containers.setting, "block");
+        setActiveTab("settingButton");
         setSelected(icons.bed, false);
         setSelected(icons.airmattress, false);
         setSelected(icons.pressuremap, false);

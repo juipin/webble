@@ -301,7 +301,7 @@ const ddActivity = document.getElementById('ddActivity');
 const ddMobility = document.getElementById('ddMobility');
 const ddNutrition = document.getElementById('ddNutrition');
 const ddShear = document.getElementById('ddShear');
-const lblBradenScore = document.getElementById('lblBradenScore')
+const lblBradenScoreUser = document.getElementById('lblBradenScoreUser')
 const lblBMI = document.getElementById("lblBMI");
 
 // Define BLE Device Specs
@@ -1156,7 +1156,14 @@ function updateUserInfoFromDisplay() {
   valueMobility = Number(ddMobility.value);
   valueNutrition = Number(ddNutrition.value);
   valueShear = Number(ddShear.value);
-  lblBradenScore.textContent = String(valueSensory + valueMoisture + valueActivity + valueMobility + valueNutrition + valueShear);
+  iBradenScore = valueSensory + valueMoisture + valueActivity + valueMobility + valueNutrition + valueShear;
+  if (lblBradenScoreUser) lblBradenScoreUser.textContent = String(iBradenScore);
+  const lblBradenScorePRS = document.getElementById("lblBradenScorePRS");
+  if (lblBradenScorePRS) lblBradenScorePRS.textContent = String(iBradenScore);
+  const lblShear = document.getElementById("lblShear");
+  if (lblShear) lblShear.textContent = String(valueShear);
+  const lblMobility = document.getElementById("lblMobility");
+  if (lblMobility) lblMobility.textContent = String(valueMobility);
 }
 
 function updateUserInfoToDisplay() {
@@ -1279,7 +1286,7 @@ function updatePressureReleaseSettingToDisplay() {
   document.getElementById("taDurationInTurnPosition").value = String(iDurationInTurnPosition);
   document.getElementById("taDurationInFlatPosition").value = String(iDurationInFlatPosition);
   document.getElementById("taDurationAlternating").value = String(iDurationAlternating);
-  document.getElementById("lblBradenScore").textContent = String(iBradenScore);
+  document.getElementById("lblBradenScorePRS").textContent = String(iBradenScore);
   document.getElementById("lblShear").textContent = String(valueShear);
   document.getElementById("lblMobility").textContent = String(valueMobility);
 }
