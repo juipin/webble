@@ -458,25 +458,62 @@
         <!-- Footer end. -->
       </footer>      
 
+      <div id="updateBanner" style="display:none; position:fixed; left:0; right:0; bottom:0; background:#111827; color:#ffffff; padding:10px 12px; z-index:9999; font-family:Arial, Helvetica, sans-serif; text-align:left">
+        <span>Update available.</span>
+        <button id="btnReloadUpdate" style="margin-left:12px; background:#F97316; color:#111827; border:none; border-radius:10px; padding:6px 10px; cursor:pointer">Reload</button>
+        <button id="btnDismissUpdate" style="margin-left:8px; background:transparent; color:#ffffff; border:1px solid #ffffff; border-radius:10px; padding:6px 10px; cursor:pointer">Later</button>
+      </div>
+
       <script>
         if ("serviceWorker" in navigator) {
           window.addEventListener("load", () => {
-            navigator.serviceWorker.register("./sw.js?v=2").then((reg) => {
-              const tryActivate = () => {
-                if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+            let pendingReload = false;
+            let waitingWorker = null;
+            const banner = document.getElementById("updateBanner");
+            const btnReload = document.getElementById("btnReloadUpdate");
+            const btnDismiss = document.getElementById("btnDismissUpdate");
+
+            const showBanner = () => {
+              if (!banner) return;
+              banner.style.display = "block";
+            };
+            const hideBanner = () => {
+              if (!banner) return;
+              banner.style.display = "none";
+            };
+
+            if (btnDismiss) btnDismiss.addEventListener("click", hideBanner);
+            if (btnReload) {
+              btnReload.addEventListener("click", () => {
+                pendingReload = true;
+                if (waitingWorker) waitingWorker.postMessage("SKIP_WAITING");
+              });
+            }
+
+            navigator.serviceWorker.register("./sw.js?v=3").then((reg) => {
+              const captureWaiting = () => {
+                if (reg.waiting) {
+                  waitingWorker = reg.waiting;
+                  showBanner();
+                }
               };
-              tryActivate();
+
+              captureWaiting();
               reg.addEventListener("updatefound", () => {
                 const sw = reg.installing;
                 if (!sw) return;
                 sw.addEventListener("statechange", () => {
-                  tryActivate();
+                  if (sw.state === "installed" && navigator.serviceWorker.controller) {
+                    captureWaiting();
+                  }
                 });
               });
+
               reg.update();
             });
+
             navigator.serviceWorker.addEventListener("controllerchange", () => {
-              window.location.reload();
+              if (pendingReload) window.location.reload();
             });
           });
         }

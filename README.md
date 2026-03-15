@@ -42,6 +42,24 @@ The service worker ([sw.js](file:///f:/PlatformIO/Projects/Smartbed/WebBLE_GUI/s
 - Intercepting requests and serving cached files when appropriate (especially for app startup/navigation).
 - Enabling the browser to treat the site like an app together with the manifest ([manifest.webmanifest](file:///f:/PlatformIO/Projects/Smartbed/WebBLE_GUI/manifest.webmanifest)).
 
+### Install on PC (Chrome / Edge)
+
+You can “install” the web app on Windows/macOS too:
+
+- Open the site in **Chrome** or **Microsoft Edge**.
+- Use the browser menu:
+  - Chrome: menu → **Cast, save, and share** → **Install page as app** (wording may vary)
+  - Edge: menu → **Apps** → **Install this site as an app**
+- An app icon is created and it runs in a standalone window (no URL bar).
+
+### Updates
+
+PWAs update by downloading new files in the background.
+
+- The service worker controls caching, so updates may not appear immediately in an already-open app.
+- This app shows an **“Update available → Reload”** banner when a new version is ready, so users can reload at a safe time.
+- When publishing a release, bumping the cache name in `sw.js` (e.g. `smartbed-webble-v3`, `v4`) forces old caches to be dropped automatically.
+
 ## Asset paths (important)
 
 Use these conventions to avoid breaking references when you move files:

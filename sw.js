@@ -1,4 +1,4 @@
-const CACHE_NAME = "smartbed-webble-v2";
+const CACHE_NAME = "smartbed-webble-v3";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
