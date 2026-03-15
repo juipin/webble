@@ -1,4 +1,4 @@
-const CACHE_NAME = "smartbed-webble-v1";
+const CACHE_NAME = "smartbed-webble-v2";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -28,6 +28,10 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event && event.data === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -44,6 +48,16 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req))
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(req);
+      const fetched = fetch(req)
+        .then((res) => {
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        })
+        .catch(() => null);
+      return cached || (await fetched) || Response.error();
+    })()
   );
 });

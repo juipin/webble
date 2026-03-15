@@ -461,7 +461,23 @@
       <script>
         if ("serviceWorker" in navigator) {
           window.addEventListener("load", () => {
-            navigator.serviceWorker.register("./sw.js");
+            navigator.serviceWorker.register("./sw.js?v=2").then((reg) => {
+              const tryActivate = () => {
+                if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+              };
+              tryActivate();
+              reg.addEventListener("updatefound", () => {
+                const sw = reg.installing;
+                if (!sw) return;
+                sw.addEventListener("statechange", () => {
+                  tryActivate();
+                });
+              });
+              reg.update();
+            });
+            navigator.serviceWorker.addEventListener("controllerchange", () => {
+              window.location.reload();
+            });
           });
         }
       </script>
