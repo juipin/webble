@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Smartbed Web BLE App</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, user-scalable=yes">    
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" href="asset/favicon.ico">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="stylesheet" type="text/css" href="src/style.css">
+    <script src="common/smartbed_init.js" defer></script>
+    <script src="common/smartbed_ui_common.js" defer></script>
+    <script src="src/smartbed_webble.js" defer></script>
+    <!--
+    <script src=""https://code.responsivevoice.org/responsivevoice.js"></script>
+    -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!--
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.css"/>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick-theme.min.css"/>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js"></script>
+    -->
+    <style>
+    body,h1,h2,h3,h4,h5,h6 {font-family: "Lato", sans-serif}
+    .w3-bar,h1,button {font-family: "Montserrat", sans-serif}
+    </style>
+  </head>
+
+  <body onload="setInitialValues()">
+    <main class="main">
+
+      <!-- Navbar -->
+      <div class="w3-top">
+        <div id="navBar" class="w3-bar w3-dark-grey w3-card w3-left-align w3-medium">
+          <a class="w3-bar-item w3-button w3-hide-medium w3-hide-large w3-right w3-padding w3-hover-white w3-medium w3-dark-grey" href="javascript:void(0);" onclick="toggleMenu()" title="Toggle Navigation Menu"><i class="fa fa-bars"></i></a>
+          <a href="#" class="w3-bar-item w3-button w3-padding w3-white" id="bleButton" onclick="button_click(this.id)">BLE Connect</a>
+          <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="bedButton" onclick="button_click(this.id)">Bed</a>
+          <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="airmattressButton" onclick="button_click(this.id)">Air Mattress</a>
+          <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="pressuremapButton" onclick="button_click(this.id)">Pressure Map</a>
+          <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="settingButton" onclick="button_click(this.id)">Setting</a>
+        </div>
+
+        <!-- Navbar on small screens -->
+        <div id="navDemo" class="w3-bar-block w3-dark-grey w3-hide w3-hide-large w3-hide-medium w3-medium">
+          <a href="#" class="w3-bar-item w3-button w3-padding" id="bedButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Bed</a>
+          <a href="#" class="w3-bar-item w3-button w3-padding" id="airmattressButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Air Mattress</a>
+          <a href="#" class="w3-bar-item w3-button w3-padding" id="pressuremapButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Pressure Map</a>
+          <a href="#" class="w3-bar-item w3-button w3-padding" id="settingButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Setting</a>
+        </div>
+      </div>
+
+      <!-- BLE Connect -->
+      <a name="bleconnect"> </a>
+      <div id="bleContainer" class="w3-container w3-dark-grey w3-center" style="padding:64px 16px 64px 16px">
+        <h1 class="w3-margin w3-xxxlarge">Smart Bed</h1>
+        <p class="w3-xlarge">Companion App</p>
+        <div class="card-grid">
+            <div class="card">
+                <p>
+                    <button id="connectBleButton" class="connectButton"> Connect to BLE Device</button>
+                    <button id="disconnectBleButton" class="disconnectButton"> Disconnect BLE Device</button>
+                </p>
+                <p class="gray-label">BLE state: <strong><span id="bleState" style="color:#d13a30;">Device Disconnected</span></strong></p>
+                <br>
+                <p>Last value received: <span id="valueContainer">NaN</span></p>
+                <p>Last value sent: <span id="valueSent">NaN</span></p>
+            </div>
+        </div>
+      </div>
+
+      <!-- User Information -->
+      <a name="userInformationScreen"> </a>
+      <div id="userInformationContainer" class="w3-container w3-dark-grey w3-center" style="width:auto; height:480px; padding:56px 16px">
+        <div class="w3-container w3-center my-black" style="width:800px; height:480px; margin-left:auto; position:relative; margin-right:auto">
+          <!-- Static -->
+          <p class="w3-large w3-left-align" style="position:absolute; left:330px; top:4px; color:orange">User Information</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:33px; top:38px; color:white">Name:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:483px; top:38px; color:white">Sex:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:670px; top:38px; color:white">Age:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:33px; top:68px; color:white">Weight:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:164px; top:68px; color:white">kg</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:267px; top:68px; color:white">Height:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:393px; top:68px; color:white">cm</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:483px; top:68px; color:white">Eye-to-Hip:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:670px; top:68px; color:white">BMI:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:33px; top:98px; color:grey">Measured -</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:120px; top:98px; color:grey">Percent:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:225px; top:98px; color:grey">Width:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:320px; top:98px; color:grey">Height:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:425px; top:98px; color:grey">Eye2Hip:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:540px; top:98px; color:grey">Eye2Heel:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:660px; top:98px; color:grey">Hip2Thighs:</p>
+          <div class="rectangle-border" style="left:35px; top:160px; width:378px; height:310px"></div>
+          <p class="w3-large w3-left-align" style="position:absolute; left:210px; top:166px; color:orange">Braden scale</p>
+          <div class="rectangle-border" style="left:425px; top:160px; width:340px; height:310px"></div>
+          <p class="w3-large w3-left-align" style="position:absolute; left:550px; top:166px; color:orange">Reminders</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:230px; top:400px; color:white">Total Score:</p>
+          <p class="w3-small w3-left-align" style="position:absolute; left:150px; top:436px; color:white">A total score less than 19 indicates the patient</p>
+          <p class="w3-small w3-left-align" style="position:absolute; left:150px; top:450px; color:white">is at risk for developing pressure injuries.</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:45px; top:200px; color:white">Sensory:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:45px; top:230px; color:white">Moisture:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:45px; top:260px; color:white">Out Of Bed Activity:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:45px; top:290px; color:white">In Bed Mobility:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:45px; top:320px; color:white">Nutrition:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:45px; top:350px; color:white">Friction & Shear:</p>
+          <!-- Show -->
+          <p class="w3-medium w3-left-align" id="lblBMI" style="position:absolute; left:714px; top:68px; color:white">20</p>
+          <p class="w3-large w3-left-align" id="lblBradenScore" style="position:absolute; left:320px; top:397px; color:white">10</p>
+          <!-- Control -->
+          <button id="btnSaveUserInfoAndReturn" onclick="setSaveUserInfoAndReturn()" class="animatedButton w3-small" style="position:absolute; left: 600px; top:6px">Save and Return</button>
+          <input type="text" class="oneLineText" id="taName" name="taName" style="left:80px; top:38px; width:300px;" placeholder="Your Name">
+          <input type="text" class="oneLineText" id="taAge" name="taAge" style="left:708px; top:38px; width:42px;" placeholder="65">
+          <input type="text" class="oneLineText" id="taBodyWeight" name="taBodyWeight" style="left:92px; top:68px; width:67px;" placeholder="60" onchange="updateUserInfoFromDisplay()">
+          <input type="text" class="oneLineText" id="taBodyHeight" name="taBodyHeight" style="left:320px; top:68px; width:67px;" placeholder="170" onchange="updateUserInfoFromDisplay()">
+          <input type="text" class="oneLineText" id="taEyeToHip" name="taEyeToHip" style="left:568px; top:68px; width:67px;" placeholder="70">
+          <input type="text" class="oneLineText" id="taBodyPercent" name="taBodyPercent" style="left:180px; top:98px; width:35px;" placeholder="40">          
+          <input type="text" class="oneLineText" id="taBodyWidth" name="taBodyWidth" style="left:275px; top:98px; width:35px;" placeholder="7">
+          <input type="text" class="oneLineText" id="taBodyHeight" name="taBodyHeight" style="left:375px; top:98px; width:35px;" placeholder="12">
+          <input type="text" class="oneLineText" id="taEye2HipCols" name="taEye2HipCols" style="left:490px; top:98px; width:35px;" placeholder="19">
+          <input type="text" class="oneLineText" id="taEye2HeelCols" name="taEye2HeelCols" style="left:614px; top:98px; width:35px;" placeholder="40">
+          <input type="text" class="oneLineText" id="taHip2ThighsAngle" name="taHip2ThighsAngle" style="left:745px; top:98px; width:35px;" placeholder="35">
+          <textarea placeholder="Enter reminding notes here" id="reminders" name="reminders" rows="11" style="position:absolute; left:450px; top:200px; width:290px; padding: 4px 4px 4px 4px; color:white; background:transparent; border:none; outline:none"></textarea>
+          
+          <div class="sex">
+            <div class="dropup2">
+              <select id="ddSex" class="dropbtn2" style="width:80px">
+                <option value="0" selected="selected">Male</option>
+                <option value="1">Female</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="sensory">
+            <div class="dropup2">
+              <select id="ddSensory" class="dropbtn2" onchange="updateUserInfoFromDisplay()">
+                <option value="1" selected="selected">1. Completely Limited</option>
+                <option value="2">2. Very Limited</option>
+                <option value="3">3. Slightly Limited</option>
+                <option value="4">4. No Impairment</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="moisture">
+            <div class="dropup2">
+              <select id="ddMoisture" class="dropbtn2" onchange="updateUserInfoFromDisplay()">
+                <option value="1" selected="selected">1. Completely Moist</option>
+                <option value="2">2. Often Moist</option>
+                <option value="3">3. Occasionally Moist</option>
+                <option value="4">4. Rarely Moist</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="outOfBedActivity">
+            <div class="dropup2">
+              <select id="ddActivity" class="dropbtn2" onchange="updateUserInfoFromDisplay()">
+                <option value="1" selected="selected">1. Bedfast</option>
+                <option value="2">2. Chairfast</option>
+                <option value="3">3. Walks Occasionally</option>
+                <option value="4">4. Walks Frequently</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="inBedMobility">
+            <div class="dropup2">
+              <select id="ddMobility" class="dropbtn2" onchange="updateUserInfoFromDisplay()">
+                <option value="1" selected="selected">1. Constantly Immobile</option>
+                <option value="2">2. Very Limited</option>
+                <option value="3">3. Slightly Limited</option>
+                <option value="4">4. No Limitation</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="nutrition">
+            <div class="dropup2">
+              <select id="ddNutrition" class="dropbtn2" onchange="updateUserInfoFromDisplay()">
+                <option value="1" selected="selected">1. Very Poor</option>
+                <option value="2">2. Probably Inadequate</option>
+                <option value="3">3. Adequate</option>
+                <option value="4">4. Excellent</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="shear">
+            <div class="dropup2">
+              <select id="ddShear" class="dropbtn2" onchange="updateUserInfoFromDisplay()">
+                <option value="1" selected="selected">1. Problem</option>
+                <option value="2">2. Potential Problem</option>
+                <option value="3">3. No Apparent Problem</option>
+              </select>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+
+      <!-- Smartbed Pressure Relief Sequence Information -->
+      <a name="smartbedControlScreen"> </a>
+      <div id="smartbedControlContainer" class="w3-container w3-dark-grey w3-center" style="width:auto; height:480px; padding:56px 16px">
+        <div class="w3-container w3-center my-black" style="width:800px; height:480px; margin-left:auto; position:relative; margin-right:auto">
+          <!-- Static -->
+          <p class="w3-large w3-left-align" style="position:absolute; left:280px; top:4px; color:orange">Pressure Release Setting</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:33px; top:38px; color:white">Braden Score:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:200px; top:38px; color:white">Friction & Shear:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:374px; top:38px; color:white">In Bed Mobility:</p>
+          <div class="rectangle-border" style="left:35px; top:80px; width:720px; height:54px"></div>
+          <p class="w3-large w3-left-align" style="position:absolute; left:50px; top:82px; color:orange">Air Cells:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:130px; top:84px; color:white">Redistribute every period. If inadequate, supplement it with Alternating mode.</p>
+          <pre><p class="w3-medium w3-left-align" style="position:absolute; left:130px; top:104px; color:white">Continue to alternate every       minutes.</p></pre>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:130px; top:138px; color:orange">If inadequate, supplement it with bed plate movements.</p>
+          <div class="rectangle-border" style="left:35px; top:160px; width:720px; height:300px"></div>
+          <p class="w3-large w3-left-align" style="position:absolute; left:50px; top:162px; color:orange">Bed:</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:194px; top:164px; color:white">Period 1</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:314px; top:164px; color:white">Period 2</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:434px; top:164px; color:white">Period 3</p>
+          <p class="w3-medium w3-left-align" style="position:absolute; left:554px; top:164px; color:white">Period 4</p> 
+          <p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:212px; color:white">Duration:</p> 
+          <p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:262px; color:white">Back Angle:</p> 
+          <p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:312px; color:white">Leg Angle:</p> 
+          <p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:362px; color:white">Turn Angle:</p>
+          <pre><p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:412px; color:white">Turning:  Turn at a Step Angle of       degrees until the set Turn Angle,</p></pre>
+          <pre><p class="w3-medium w3-left-align" style="position:absolute; left:70px; top:432px; color:white">and stay for       minutes, then turn Flat for       minutes; and repeat.</p></pre>
+          <!-- Show -->
+          <p class="w3-large w3-left-align" id="lblBradenScore" style="position:absolute; left:132px; top:36px; color:white">20</p>
+          <p class="w3-large w3-left-align" id="lblShear" style="position:absolute; left:314px; top:36px; color:white">2</p>
+          <p class="w3-large w3-left-align" id="lblMobility" style="position:absolute; left:486px; top:36px; color:white">2</p>
+          <!-- Control -->
+          <button id="btnSavePressureReleaseSettingAndReturn" onclick="setSaveSmartbedControlInfoAndReturn()" class="animatedButton w3-small" style="position:absolute; left: 600px; top:6px">Save and Return</button>
+          <button id="btnSetPressureReleaseSettingDefault" onclick="setPRSDefaultValues()" class="animatedButton w3-small" style="position:absolute; left: 600px; top:42px">Set Default Values</button>
+          <input type="text" class="oneLineText w3-large" id="taDurationP1" name="taDurationP1" style="left:200px; top:210px; width:40px;" placeholder="30">
+          <input type="text" class="oneLineText w3-large" id="taDurationP2" name="taDurationP2" style="left:320px; top:210px; width:40px;" placeholder="30">
+          <input type="text" class="oneLineText w3-large" id="taDurationP3" name="taDurationP3" style="left:440px; top:210px; width:40px;" placeholder="30">
+          <input type="text" class="oneLineText w3-large" id="taDurationP4" name="taDurationP4" style="left:560px; top:210px; width:40px;" placeholder="30">
+          <input type="text" class="oneLineText w3-large" id="taBackAngleP1" name="taBackAngleP1" style="left:200px; top:260px; width:40px;" placeholder="14">
+          <input type="text" class="oneLineText w3-large" id="taBackAngleP2" name="taBackAngleP2" style="left:320px; top:260px; width:40px;" placeholder="0">
+          <input type="text" class="oneLineText w3-large" id="taBackAngleP3" name="taBackAngleP3" style="left:440px; top:260px; width:40px;" placeholder="30">
+          <input type="text" class="oneLineText w3-large" id="taBackAngleP4" name="taBackAngleP4" style="left:560px; top:260px; width:40px;" placeholder="0">
+          <input type="text" class="oneLineText w3-large" id="taLegAngleP1" name="taLegAngleP1" style="left:200px; top:310px; width:40px;" placeholder="15">
+          <input type="text" class="oneLineText w3-large" id="taLegAngleP2" name="taLegAngleP2" style="left:320px; top:310px; width:40px;" placeholder="0">
+          <input type="text" class="oneLineText w3-large" id="taLegAngleP3" name="taLegAngleP3" style="left:440px; top:310px; width:40px;" placeholder="45">
+          <input type="text" class="oneLineText w3-large" id="taLegAngleP4" name="taLegAngleP4" style="left:560px; top:310px; width:40px;" placeholder="30">
+          <input type="text" class="oneLineText w3-large" id="taTurnAngleP1" name="taTurnAngleP1" style="left:200px; top:360px; width:40px;" placeholder="15">
+          <input type="text" class="oneLineText w3-large" id="taTurnAngleP2" name="taTurnAngleP2" style="left:320px; top:360px; width:40px;" placeholder="15">
+          <input type="text" class="oneLineText w3-large" id="taTurnAngleP3" name="taTurnAngleP3" style="left:440px; top:360px; width:40px;" placeholder="30">
+          <input type="text" class="oneLineText w3-large" id="taTurnAngleP4" name="taTurnAngleP4" style="left:560px; top:360px; width:40px;" placeholder="15">
+          <input type="text" class="oneLineTextWithNoOutline w3-large" id="taDurationAlternating" name="taDurationAlternating" style="left:362px; top:102px; width:36px;" placeholder="15">
+          <input type="text" class="oneLineTextWithNoOutline w3-large" id="taStepAngle" name="taStepAngle" style="left:360px; top:410px; width:36px;" placeholder="2">
+          <input type="text" class="oneLineTextWithNoOutline w3-large" id="taDurationInTurnPosition" name="taDurationInTurnPosition" style="left:180px; top:430px; width:36px;" placeholder="6">
+          <input type="text" class="oneLineTextWithNoOutline w3-large" id="taDurationInFlatPosition" name="taDurationInFlatPosition" style="left:455px; top:430px; width:36px;" placeholder="20">
+
+        </div>
+      </div>
+
+      <!-- Background -->
+      <a name="background"> </a>
+      <div class="w3-container w3-dark-grey w3-center" style="padding:56px 16px">
+        <div id="backgroundContainer" class="backgroundContainer">
+          <img src="asset/bg_200x120.jpg" alt="background image" style="width:100%; height:auto" class="my-background-image">
+          <!-- Select Mode -->
+          <div class="mode">
+            <select id="modeSelect" class="dropbtn1" onchange="runModeSelect()">
+                <option value="0" selected="selected">Smart Mode</option>
+                <option value="1">Redistribution</option>
+                <option value="2">Alternating</option>
+                <option value="3">Autoturn</option>
+                <option value="4">Static</option>
+                <option value="5">Autofirm</option>
+            </select>
+          </div>
+          <!-- Note for image button, onclick does not work, use onmousedown instead! -->
+          <button type="image" id="bedIcon" class="icon bedButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_snb_50x45.jpg" alt="bed icon"> </button>
+          <button type="image" id="airmattressIcon" class="icon airmattressButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_airmattress_50x45.jpg" alt="air mattress icon"> </button>
+          <button type="image" id="pressuremapIcon" class="icon pressuremapButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_pressure_50x45.jpg" alt="pressure map icon"> </button>
+          <button type="image" id="settingIcon" class="icon settingButton2" onmousedown="button_click(this.id); this.focus(); this.blur();"> <img src="asset/icon_setting_50x45.jpg" alt="setting icon"> </button>
+          <p id="pressureReleaseActionMsg" class="w3-medium w3-left-align setVisibility" style="position:absolute; left:350px; top:12px">Pressure relief in 15 minutes</p>
+          
+          <div class="groupcard">
+
+            <!-- Bed -->
+            <a name="bed"> </a>
+            <div id="bedContainer">
+              <!-- Static -->
+              <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Bed</p>
+              <div id="panelLegFlat" class="card-show" style="left:60px; top:133px; width:96px; height:177px"> </div>
+              <div id="panelLegSlope" class="card-show" style="left:158px; top:133px; width:63px; height:177px"> </div>
+              <div id="panelCentre" class="card-show" style="left:223px; top:133px; width:129px; height:177px"> </div>
+              <div id="panelBack" class="card-show" style="left:354px; top:133px; width:173px; height:177px"> </div>
+              <img src="asset/handunit167x345.jpg" alt="hand unit" style="position:absolute; left:590px; top:50px; width:165px; height:345px">
+              <!-- Show -->
+              <img src="asset/right_rotation45x45.jpg" alt="right rotation" id="imgRightTurn" class="setVisibility" style="position:absolute; left:285px; top:143px; width:45px; height:45px">
+              <img src="asset/left_rotation45x45.jpg" alt="left rotation" id="imgLeftTurn" class="setVisibility" style="position:absolute; left:285px; top:262px; width:45px; height:45px">
+              <p id="lblRightAngleCurrent" class="w3-large w3-text-black setVisibility" style="position:absolute; left:274px; top:170px">30</p>
+              <p id="lblLeftAngleCurrent" class="w3-large w3-text-black setVisibility" style="position:absolute; left:274px; top:260px">30</p>
+              <p id="lblLegAngleCurrent" class="w3-large w3-text-black setVisibility" style="position:absolute; left:173px; top:210px">-60</p>
+              <p id="lblBackAngleCurrent" class="w3-large w3-text-black setVisibility" style="position:absolute; left:423px; top:210px">80</p>
+              <p id="ledPower" class="dot" style="background-color:red; left:612px; top:356px"></p>
+              <p id="ledAction" class="dot setVisibility" style="background-color:green; left:715px; top:356px"></p>
+              <p id="timestamp" class="w3-medium w3-right-align" style="position:absolute; left:730px; top:12px">NaN</p>
+              <p id="lblAutoTurn" class="w3-medium w3-left-align setVisibility" style="position:absolute; left: 200px; top:320px">Auto turn in 20 minutes</p>
+              <!-- Control -->
+              <button id="btnLeftTurn" class="transparentButton1" style="left:600px; top:78px">
+              <button id="btnRightTurn" class="transparentButton1" style="left:686px; top:78px">
+              <button id="btnBackUp" class="transparentButton1" style="left:600px; top:142px">
+              <button id="btnBackDown" class="transparentButton1" style="left:686px; top:142px">
+              <button id="btnLegUp" class="transparentButton1" style="left:600px; top:210px">
+              <button id="btnLegDown" class="transparentButton1" style="left:686px; top:210px">
+              <button id="btnAutoturnA" class="transparentButton1" style="left:600px; top:275px">
+              <button id="btnAutoturnB" class="transparentButton1" style="left:686px; top:275px">
+              <button id="btnResetPosition" class="transparentButton1" style="left:643px; top:336px">
+            </div>
+
+
+            <!-- Air Mattress -->
+            <a name="airmattress"> </a>
+            <div id="airmattressContainer">
+              <!-- Static -->
+              <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Air Mattress</p>
+              <img src="asset/bg_mattress322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
+              <img src="asset/exhaustBlocked21x15.jpg" alt="exhaust" id="imgExhaustBlocked" style="position:absolute; left:675px; top:312px; width:42px; height:auto">
+              <!-- Show -->        
+              <p id="lblPressurePump" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:90px">32</p>
+              <p id="lblPressureMainA" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:154px">32</p>
+              <p id="lblPressureMainB" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:212px">32</p>
+              <p id="lblPressureMainC" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:274px">32</p>  
+              <p id="lblPressurePillow" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:520px; top:252px">32</p>      
+              <p id="panelA1" class="panelAirCell" style="left:66px; top:175px; width:30px; height:100px"></p>
+              <p id="panelB1" class="panelAirCell" style="left:96px; top:175px; width:30px; height:100px"></p>
+              <p id="panelC1" class="panelAirCell" style="left:126px; top:175px; width:30px; height:100px"></p>
+              <p id="panelA2" class="panelAirCell" style="left:160px; top:175px; width:30px; height:100px"></p>
+              <p id="panelB2" class="panelAirCell" style="left:190px; top:175px; width:30px; height:100px"></p>
+              <p id="panelC2" class="panelAirCell" style="left:224px; top:175px; width:30px; height:100px"></p>
+              <p id="panelA3" class="panelAirCell" style="left:254px; top:175px; width:30px; height:100px"></p>
+              <p id="panelB3" class="panelAirCell" style="left:284px; top:175px; width:30px; height:100px"></p>
+              <p id="panelC3" class="panelAirCell" style="left:314px; top:175px; width:30px; height:100px"></p>
+              <p id="panelA4" class="panelAirCell" style="left:344px; top:175px; width:30px; height:100px"></p>
+              <p id="panelB4" class="panelAirCell" style="left:378px; top:175px; width:30px; height:100px"></p>
+              <p id="panelC4" class="panelAirCell" style="left:410px; top:175px; width:30px; height:100px"></p>
+              <p id="panelA5" class="panelAirCell" style="left:440px; top:175px; width:30px; height:100px"></p>
+              <p id="panelB5" class="panelAirCell" style="left:470px; top:175px; width:30px; height:100px"></p>
+              <p id="panelA6Right" class="panelAirCell" style="left:66px; top:140px; width:160px; height:40px"></p>
+              <p id="panelA6Left" class="panelAirCell" style="left:66px; top:272px; width:160px; height:40px"></p>
+              <p id="panelB6Right" class="panelAirCell" style="left:221px; top:140px; width:130px; height:40px"></p>
+              <p id="panelB6Left" class="panelAirCell" style="left:221px; top:272px; width:130px; height:40px"></p>
+              <p id="panelC6Right" class="panelAirCell" style="left:350px; top:140px; width:150px; height:40px"></p>
+              <p id="panelC6Left" class="panelAirCell" style="left:350px; top:272px; width:150px; height:40px"></p>
+              <p id="panelMainA" class="panelAirCell" style="left:580px; top:135px; width:64px; height:57px"></p>
+              <p id="panelMainB" class="panelAirCell" style="left:580px; top:195px; width:64px; height:57px"></p>
+              <p id="panelMainC" class="panelAirCell" style="left:580px; top:255px; width:64px; height:57px"></p>
+              <p id="panelPump" class="panelAirCell" style="left:570px; top:70px; width:140px; height:60px"></p>
+              <p id="panelPump1" class="panelAirCell" style="left:682px; top:130px; width:30px; height:186px"></p>
+              
+              <!-- Control -->
+            </div>
+
+
+            <!-- Pressure Map -->
+            <a name="pressuremap"> </a>
+            <div id="pressuremapContainer">
+              <!-- Static -->
+              <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Pressure Map</p>
+              <p class="w3-medium w3-left-align" style="position:absolute; left:550px; top:55px; color:orange">Accumulated Pressure</p>
+              <!-- Show -->
+              <p id="maxProbabilityLabel" class="w3-medium w3-left-align" style="position:absolute; left:200px; top:55px">Unknown</p>
+              <p id="maxProbability" class="w3-medium w3-left-align" style="position:absolute; left:370px; top:55px">100%</p>
+              <!-- Control -->
+              <label class="switch" style="position:absolute; left:475px; top:55px" onchange="runAccumulatedPressureSelect()"><input id="isAccumulatedPressure" type="checkbox"><span class="slider round"></span></label>
+              <canvas id="pressureMapCanvas" width="672" height="280" style="position:absolute; left:64px; top:84px; border:2px solid white"></canvas>
+            </div>
+            
+
+            <!-- Setting -->
+            <a name="setting"> </a>
+            <div id="settingContainer">
+              <!-- Static -->
+              <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Setting</p>
+              <!-- Show -->
+              <!-- Control -->
+              <button id="defaultValues" onclick="setDefaultValues()" class="animatedButton w3-small" style="position:absolute; left:30px; top:62px">Default Values</button>
+              <button id="userInformation" onclick="setUserInformation()" class="animatedButton w3-small" style="position:absolute; left:215px; top:62px">User Information</button>
+              <button id="smartbedControl" onclick="setSmartbedControl()"class="animatedButton w3-small" style="position:absolute; left:415px; top:62px">Smartbed Control</button>
+              <button id="bodyMeasurement" onclick="executeSendMeasureBody()" class="animatedButton w3-small" style="position:absolute; left:615px; top:62px">Body Measurement</button>
+              
+              <div class="w3-medium w3-left-align" style="position:absolute; left:25px; top:120px">          
+                <input type="checkbox" id="notToTurn" name="notToTurn" value="notToTurn"><label for="notToTurn">&nbsp  Not to turn</label><br>
+                <input type="checkbox" id="notToTurnRight" name="notToTurnRight" value="notToTurnRight"><label for="notToTurnRight">&nbsp  Not to turn right</label><br>
+                <input type="checkbox" id="notToTurnLeft" name="notToTurnLeft" value="notToTurnLeft"><label for="notToTurnLeft">&nbsp  Not to turn left</label><br>
+                <input type="checkbox" id="notToMoveBack" name="notToMoveBack" value="notToMoveBack"><label for="notToMoveBack">&nbsp  Not to move back</label><br>
+                <input type="checkbox" id="notToMoveLeg" name="notToMoveLeg" value="notToMoveLeg"><label for="notToMoveLeg">&nbsp  Not to move leg</label><br>
+                <input type="checkbox" id="caregiverAlert" name="caregiverAlert" value="caregiverAlert"><label for="caregiverAlert">&nbsp  Caregiver alert</label><br>
+                <input type="checkbox" id="faultAlert" name="faultAlert" value="faultAlert"><label for="faultAlert">&nbsp  Fault alert</label><br>
+              </div>
+
+              <div style="position:absolute; left:350px; top:110px; padding: 5px; height:280px; width:420px; background-color:darkgrey; border-radius:5px">
+                <span class="frame">
+                  <span class="w3-small" style="display:block">Static</span> <span class="w3-medium" id="lblStaticPressure" style="display:block; color:orange">32</span> <span class="w3-tiny" style="display:block; color:lightgrey">mmHg</span>
+                  <div class="slidecontainer">
+                  <input type="range" id="rangeStaticPressure" name="rangeStaticPressure" min="20" max="42" value="32" />
+                  </div>
+                </span>
+                <span class="frame">
+                  <span class="w3-small" style="display:block">Autoturn</span> <span class="w3-medium" id="lblAngleAutoturn" style="display:block; color:orange">20</span> <span class="w3-tiny" style="display:block; color:lightgrey">degrees</span>
+                  <div class="slidecontainer">
+                  <input type="range" id="rangeAngleAutoturn" name="rangeAngleAutoturn" min="10" max="40" value="30" />
+                  </div>
+                </span>
+                <span class="frame">
+                  <span class="w3-small" style="display:block">Redistribute</span> <span class="w3-medium" id="lblDurationRedistribute" style="display:block; color:orange">30</span> <span class="w3-tiny" style="display:block; color:lightgrey">mmHg</span>
+                  <div class="slidecontainer">
+                  <input type="range" id="rangeDurationRedistribute" name="rangeDurationRedistribute" min="15" max="90" value="30" />
+                  </div>
+                </span>
+                <span class="frame">
+                  <span class="w3-small" style="display:block">Alternating</span> <span class="w3-medium" id="lblDurationAlternating" style="display:block; color:orange">15</span> <span class="w3-tiny" style="display:block; color:lightgrey">minutes</span>
+                  <div class="slidecontainer">
+                  <input type="range" id="rangeDurationAlternating" name="rangeDurationAlternating" min="5" max="60" value="15"/>
+                  </div>
+                </span>
+              </div>
+              
+              
+
+              
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Below the backgroundContainer -->
+        <p id="message"></p>
+
+      </div>
+
+
+
+      <!-- Footer. This section contains contact information. -->
+      <footer class="w3-container w3-padding-64 w3-center w3-opacity"> 
+        <div class="w3-xlarge w3-padding-32">
+          <i class="fa fa-facebook-official w3-hover-opacity"></i>
+          <i class="fa fa-instagram w3-hover-opacity"></i>
+          <i class="fa fa-linkedin w3-hover-opacity"></i>
+        </div>
+      <p>This Smart Bed Companion App was developed by the Healthcare Engineering Centre of Temasek Polytechnic.</p>
+        <br>
+        <p>You may contact Mr. Lin Liutong.</p> 
+        <a class="w3-button w3-round-xxlarge w3-black w3-margin-bottom" href="#" target="_blank">Contact Us</a>
+        <!-- Footer end. -->
+      </footer>      
+
+      <script>
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", () => {
+            navigator.serviceWorker.register("./sw.js");
+          });
+        }
+      </script>
+    </main>
+  </body>
+</html>
