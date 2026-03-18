@@ -295,8 +295,8 @@
               <p id="timestamp" class="w3-medium w3-right-align" style="position:absolute; left:730px; top:12px">NaN</p>
               <p id="lblAutoTurn" class="w3-medium w3-left-align setVisibility" style="position:absolute; left: 200px; top:320px">Auto turn in 20 minutes</p>
               <!-- Control -->               
-              <button id="smartbedControl" onclick="setSmartbedControl()"class="animatedButton w3-small" style="position:absolute; left:215px; top:62px">Smartbed Control</button>
-              <button id="bodyMeasurement" onclick="executeSendMeasureBody()" class="animatedButton w3-small" style="position:absolute; left:380px; top:62px">Body Measurement</button>
+              <button id="smartbedControl" onclick="setSmartbedControl()"class="animatedButton w3-small" style="position:absolute; left:65px; top:362px">Smartbed Control</button>
+              <button id="bodyMeasurement" onclick="executeSendMeasureBody()" class="animatedButton w3-small" style="position:absolute; left:220px; top:362px">Body Measurement</button>
               <button id="btnLeftTurn" class="transparentButton1" style="left:600px; top:78px">
               <button id="btnRightTurn" class="transparentButton1" style="left:686px; top:78px">
               <button id="btnBackUp" class="transparentButton1" style="left:600px; top:142px">
@@ -402,51 +402,135 @@
               <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Setting</p>
               <!-- Show -->
               <!-- Control -->
-              <div class="w3-small" style="position:absolute; left:50%; top:18px; transform:translateX(-50%); color:white; white-space:nowrap">
+              <div class="w3-small" style="position:absolute; left:50%; top:18px; transform:translateX(-50%); color:white; white-space:nowrap; z-index:50">
                 <span>Workflow:</span>
                 <select id="workflowMode" style="margin-left:6px; padding:2px 6px" onchange="if (window.SmartbedUICommon) window.SmartbedUICommon.setWorkflowMode(this.value)">
                   <option value="user" selected="selected">User</option>
                   <option value="developer">Developer</option>
                 </select>
               </div>
-              <button id="defaultValues" onclick="setDefaultValues()" class="animatedButton w3-small" style="position:absolute; left:30px; top:62px">Default Values</button>
-              <button id="userInformation" onclick="setUserInformation()" class="animatedButton w3-small" style="position:absolute; left:215px; top:62px">User Information</button>
-              
-              <div class="w3-medium w3-left-align" style="position:absolute; left:25px; top:120px">          
-                <input type="checkbox" id="notToTurn" name="notToTurn" value="notToTurn"><label for="notToTurn">&nbsp  Not to turn</label><br>
-                <input type="checkbox" id="notToTurnRight" name="notToTurnRight" value="notToTurnRight"><label for="notToTurnRight">&nbsp  Not to turn right</label><br>
-                <input type="checkbox" id="notToTurnLeft" name="notToTurnLeft" value="notToTurnLeft"><label for="notToTurnLeft">&nbsp  Not to turn left</label><br>
-                <input type="checkbox" id="notToMoveBack" name="notToMoveBack" value="notToMoveBack"><label for="notToMoveBack">&nbsp  Not to move back</label><br>
-                <input type="checkbox" id="notToMoveLeg" name="notToMoveLeg" value="notToMoveLeg"><label for="notToMoveLeg">&nbsp  Not to move leg</label><br>
-                <input type="checkbox" id="caregiverAlert" name="caregiverAlert" value="caregiverAlert"><label for="caregiverAlert">&nbsp  Caregiver alert</label><br>
-                <input type="checkbox" id="faultAlert" name="faultAlert" value="faultAlert"><label for="faultAlert">&nbsp  Fault alert</label><br>
-              </div>
+              <button id="defaultValues" onclick="setDefaultValues()" class="animatedButton w3-small" style="position:absolute; left:30px; top:362px; z-index:50">Default Values</button>
+              <button id="userInformation" onclick="setUserInformation()" class="animatedButton w3-small" style="position:absolute; left:150px; top:362px; z-index:50">User Information</button>
 
-              <div style="position:absolute; left:350px; top:110px; padding: 5px; height:280px; width:420px; background-color:darkgrey; border-radius:5px">
-                <span class="frame">
-                  <span class="w3-small" style="display:block">Static</span> <span class="w3-medium" id="lblStaticPressure" style="display:block; color:orange">32</span> <span class="w3-tiny" style="display:block; color:lightgrey">mmHg</span>
-                  <div class="slidecontainer">
-                  <input type="range" id="rangeStaticPressure" name="rangeStaticPressure" min="20" max="42" value="32" />
+              <div class="settings-grid" style="position:absolute; left:25px; right:25px; top:70px; bottom:12px">
+                <div class="settings-col">
+                  <div class="settings-col-title w3-medium">Turn Off Features</div>
+                  <label class="settings-check w3-small"><input type="checkbox" id="notToTurn" onchange="checkbox_click(this.id)"><span>No turning</span></label>
+                  <label class="settings-check w3-small"><input type="checkbox" id="notToMoveLeg" onchange="checkbox_click(this.id)"><span>No leg movement</span></label>
+                  <label class="settings-check w3-small"><input type="checkbox" id="noPillowMassage" onchange="checkbox_click(this.id)"><span>No pillow massage</span></label>
+                  <label class="settings-check w3-small"><input type="checkbox" id="noCooling" onchange="checkbox_click(this.id)"><span>No cooling</span></label>
+                  <label class="settings-check w3-small"><input type="checkbox" id="redistPlusAlter" onchange="checkbox_click(this.id)"><span>Redistribute + Alternating</span></label>
+                  <label class="settings-check w3-small"><input type="checkbox" id="caregiverAlert" onchange="checkbox_click(this.id)"><span>Caregiver alert</span></label>
+                  <label class="settings-check w3-small"><input type="checkbox" id="faultAlert" onchange="checkbox_click(this.id)"><span>Fault alert</span></label>
+                </div>
+
+                <div class="settings-col">
+                  <div class="settings-col-title w3-medium">Intervals</div>
+                  <div class="settings-row w3-small">
+                    <label for="rangeDurationRedistribute">Redistribute</label>
+                    <input type="number" id="rangeDurationRedistribute" min="15" max="60" step="1" value="30" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">min</span>
+                    <span id="lblDurationRedistribute" class="settings-value">30</span>
                   </div>
-                </span>
-                <span class="frame">
-                  <span class="w3-small" style="display:block">Autoturn</span> <span class="w3-medium" id="lblAngleAutoturn" style="display:block; color:orange">20</span> <span class="w3-tiny" style="display:block; color:lightgrey">degrees</span>
-                  <div class="slidecontainer">
-                  <input type="range" id="rangeAngleAutoturn" name="rangeAngleAutoturn" min="10" max="40" value="30" />
+                  <div class="settings-row w3-small">
+                    <label for="rangeDurationAlternating">Alternating</label>
+                    <input type="number" id="rangeDurationAlternating" min="1" max="15" step="1" value="5" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">min</span>
+                    <span id="lblDurationAlternating" class="settings-value">5</span>
                   </div>
-                </span>
-                <span class="frame">
-                  <span class="w3-small" style="display:block">Redistribute</span> <span class="w3-medium" id="lblDurationRedistribute" style="display:block; color:orange">30</span> <span class="w3-tiny" style="display:block; color:lightgrey">mmHg</span>
-                  <div class="slidecontainer">
-                  <input type="range" id="rangeDurationRedistribute" name="rangeDurationRedistribute" min="15" max="90" value="30" />
+                  <div class="settings-row w3-small">
+                    <label for="taAutoturnInterval">Autoturn</label>
+                    <input type="number" id="taAutoturnInterval" min="15" max="60" step="1" value="30" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">min</span>
                   </div>
-                </span>
-                <span class="frame">
-                  <span class="w3-small" style="display:block">Alternating</span> <span class="w3-medium" id="lblDurationAlternating" style="display:block; color:orange">15</span> <span class="w3-tiny" style="display:block; color:lightgrey">minutes</span>
-                  <div class="slidecontainer">
-                  <input type="range" id="rangeDurationAlternating" name="rangeDurationAlternating" min="5" max="60" value="15"/>
+                  <div class="settings-row w3-small">
+                    <label for="taNumberOfTurns">Number of turns</label>
+                    <input type="number" id="taNumberOfTurns" min="1" max="4" step="1" value="2" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit"></span>
                   </div>
-                </span>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taSidebagFillInterval">Sidebag</label>
+                    <input type="number" id="taSidebagFillInterval" min="5" max="20" step="1" value="15" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">min</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taLegAirbagInterval">Leg airbag</label>
+                    <input type="number" id="taLegAirbagInterval" min="15" max="60" step="1" value="30" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">min</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taPostureCheckInterval">Posture check</label>
+                    <input type="number" id="taPostureCheckInterval" min="30" max="120" step="1" value="120" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">min</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taHoldTimeToCoolValves">Hold cool valves</label>
+                    <input type="number" id="taHoldTimeToCoolValves" min="1" max="3" step="1" value="1" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">min</span>
+                  </div>
+                </div>
+
+                <div class="settings-col">
+                  <div class="settings-col-title w3-medium">Pressures</div>
+                  <div class="settings-row w3-small">
+                    <label for="rangeStaticPressure">Static</label>
+                    <input type="number" id="rangeStaticPressure" min="25" max="40" step="1" value="32" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">mmHg</span>
+                    <span id="lblStaticPressure" class="settings-value">32</span>
+                  </div>
+                  <div class="settings-row w3-small">
+                    <label for="taPressureFirm">Firm</label>
+                    <input type="number" id="taPressureFirm" min="32" max="52" step="1" value="42" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">mmHg</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taPressureSitting">Sitting</label>
+                    <input type="number" id="taPressureSitting" min="42" max="62" step="1" value="52" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">mmHg</span>
+                  </div>
+                  <div class="settings-row w3-small">
+                    <label for="taPressureReleased">Relief</label>
+                    <input type="number" id="taPressureReleased" min="10" max="32" step="1" value="16" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">mmHg</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taPressureMax">Maximum</label>
+                    <input type="number" id="taPressureMax" min="60" max="80" step="1" value="80" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">mmHg</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taPressureHysteresis">Hysteresis</label>
+                    <input type="number" id="taPressureHysteresis" min="2" max="8" step="1" value="4" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">mmHg</span>
+                  </div>
+
+                  <div class="settings-subtitle w3-small">Temperature &amp; RH</div>
+                  <div class="settings-row w3-small">
+                    <label for="taMinMattressTempC">Cool stop</label>
+                    <input type="number" id="taMinMattressTempC" min="22" max="30" step="1" value="25" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">°C</span>
+                  </div>
+                  <div class="settings-row w3-small">
+                    <label for="taMaxMattressTempC">Cool start</label>
+                    <input type="number" id="taMaxMattressTempC" min="25" max="33" step="1" value="30" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">°C</span>
+                  </div>
+                  <div class="settings-row w3-small">
+                    <label for="taMaxMattressRh">Max RH</label>
+                    <input type="number" id="taMaxMattressRh" min="50" max="95" step="1" value="85" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">%</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taDeltaTemperatureC">Delta temp</label>
+                    <input type="number" id="taDeltaTemperatureC" min="0" max="5" step="1" value="2" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">°C</span>
+                  </div>
+                  <div class="settings-row w3-small" data-workflow="developer">
+                    <label for="taHeatsinkMaxTempC">Heatsink max</label>
+                    <input type="number" id="taHeatsinkMaxTempC" min="65" max="75" step="1" value="65" onchange="changeSliderSetting(this.id)">
+                    <span class="settings-unit">°C</span>
+                  </div>
+                </div>
               </div>
               
               

@@ -48,19 +48,42 @@ let bNotToTurnLeft = false;
 let bNotToMoveBack = false;
 let bNotToMoveLeg = false;
 let bCaregiverAlert = true;
-let bFaultAlert = false;
+let bFaultAlert = true;
+
+let bNoPillowMassage = false;
+let bNoCooling = false;
+let bRedistPlusAlter = true;
+
+let AUTOTURN_INTERVAL = 30;
+let NUMBER_OF_TURNS = 2;
+let SIDEBAG_FILL_INTERVAL = 15;
+let LEG_AIRBAG_INTERVAL = 30;
+let POSTURE_CHECK_INTERVAL = 120;
+let HOLD_TIME_TO_COOL_VALVES = 1;
+
+let PRESSURE_FIRM = 42;
+let PRESSURE_SITTING = PRESSURE_FIRM + 10;
+let PRESSURE_RELEASED = 16;
+let PRESSURE_MAX = 80;
+let PRESSURE_HYSTERESIS = 4;
+
+let MIN_MATTRESS_TEMP_C = 25;
+let MAX_MATTRESS_TEMP_C = 30;
+let MAX_MATTRESS_RH = 85;
+let DELTA_TEMPERATURE_C = 2;
+let HEATSINK_MAX_TEMP_C = 65;
 
 let weight = 60;
 let setStaticPressure = 22;
 let setAutofirmPressure = 32;
-let setDurationAlternating = 10;
+let setDurationAlternating = 5;
 let setDurationRedistribute = 30;
 let setDurationAutoturn= 20;
 let setDurationMixed = 30;
 let setAutoTurnAngle = 15;
 let operatingModeSelected = 1;
 let minuteToNextRedistribute = 30;
-let minuteToNextAlternating = 15;
+let minuteToNextAlternating = setDurationAlternating;
 let minuteToNextAutoturn = 20;
 let minuteToNextMixedModeAction = 30;
 let percentPressurePoints = 40;
@@ -291,7 +314,6 @@ console.log("isAccumulatedPressureChecked", isAccumulatedPressureChecked);
 
 // Setting
 let lblStaticPressure = document.getElementById("lblStaticPressure");
-let lblAngleAutoturn = document.getElementById("lblAngleAutoturn");
 let lblDurationRedistribute = document.getElementById("lblDurationRedistribute");
 let lblDurationAlternating = document.getElementById("lblDurationAlternating");
 const ddSex = document.getElementById('ddSex');
@@ -406,17 +428,11 @@ ctx.fillRect(0, 0, 672, 280);
 
 // Setting
 let rangeStaticPressure = document.getElementById("rangeStaticPressure");
-let rangeAngleAutoturn = document.getElementById("rangeAngleAutoturn");
 let rangeDurationRedistribute = document.getElementById("rangeDurationRedistribute");
 let rangeDurationAlternating = document.getElementById("rangeDurationAlternating");
-lblStaticPressure.innerHTML = rangeStaticPressure.value;
-lblAngleAutoturn.innerHTML = rangeAngleAutoturn.value;
-lblDurationRedistribute.innerHTML = rangeDurationRedistribute.value;
-lblDurationAlternating.innerHTML = rangeDurationAlternating.value;
-rangeStaticPressure.oninput = function() {lblStaticPressure.innerHTML = this.value;}
-rangeAngleAutoturn.oninput = function() {lblAngleAutoturn.innerHTML = this.value;}
-rangeDurationRedistribute.oninput = function() {lblDurationRedistribute.innerHTML = this.value;}
-rangeDurationAlternating.oninput = function() {lblDurationAlternating.innerHTML = this.value;}
+if (lblStaticPressure && rangeStaticPressure) lblStaticPressure.innerHTML = rangeStaticPressure.value;
+if (lblDurationRedistribute && rangeDurationRedistribute) lblDurationRedistribute.innerHTML = rangeDurationRedistribute.value;
+if (lblDurationAlternating && rangeDurationAlternating) lblDurationAlternating.innerHTML = rangeDurationAlternating.value;
 
 // Setup Actions
 
@@ -505,7 +521,34 @@ function onDisconnected(event){
 }
 
 function handleCharacteristicChange(event){
-  const newValueReceived = new TextDecoder().decode(event.target.value);
+  const rawValue = event.target.value;
+  const bytes = new Uint8Array(rawValue.buffer, rawValue.byteOffset, rawValue.byteLength);
+  if (bytes.length >= 9 && bytes[1] === 35) {
+    let msg = "";
+    for (let i = 1; i < 9; i++) {
+      if (bytes[i] === 0) break;
+      msg += String.fromCharCode(bytes[i]);
+    }
+
+    if (msg === "#PSMAP" || msg === "#PZMAP") {
+      const colStart = bytes[9];
+      const packageNumber = Math.floor(colStart / 6);
+      pixelCount = packageNumber * pixelsPerPackage;
+      for (let i = 0; i < pixelsPerPackage; i++) {
+        if ((pixelCount + i) >= totalPixelCount) break;
+        imageGreyPixelArray[pixelCount + i] = bytes[10 + i];
+      }
+
+      container = document.getElementById("pressuremapContainer");
+      if (pixelCount >= 840 && container.style.display == "block") {
+        if (msg === "#PSMAP") drawPSColorMap();
+        else drawPZColorMap();
+      }
+      return;
+    }
+  }
+
+  const newValueReceived = new TextDecoder().decode(rawValue);
   if (newValueReceived.length > 0) {
     console.log("Characteristic value changed: ", newValueReceived);
     retrievedValue.innerHTML = newValueReceived;
@@ -645,6 +688,9 @@ function processReceivedString(rx_data) {
       }
       else if (rx_data.substring(0, 5) == "#SETS") {
         loadSETSData(rx_data.substring(5, rx_data.length));
+      }
+      else if (rx_data.substring(0, 5) == "#SETX") {
+        loadSETXData(rx_data.substring(5, rx_data.length));
       }
       else if (rx_data.substring(0, 5) == "#ALL") {
         loadALLData(rx_data.substring(5, rx_data.length));
@@ -996,6 +1042,43 @@ function loadSETSData(receivedString) {
   saveSettings();
 }
 
+function loadSETXData(receivedString) {
+  var dataLength = Math.floor(receivedString.length/3);
+  const buffer = new ArrayBuffer(dataLength);
+  var data = new Uint8Array(buffer);
+  for (let i = 0; i < dataLength; i++) {
+      data[i] = Number(receivedString.substring(i*3,(i+1)*3));
+  }
+
+  if (dataLength < 20) return;
+  if (data[0] != 1) return;
+
+  bNoPillowMassage = data[1] == 1;
+  bNoCooling = data[2] == 1;
+  bRedistPlusAlter = data[3] == 1;
+
+  AUTOTURN_INTERVAL = data[4];
+  NUMBER_OF_TURNS = data[5];
+  SIDEBAG_FILL_INTERVAL = data[6];
+  LEG_AIRBAG_INTERVAL = data[7];
+  POSTURE_CHECK_INTERVAL = data[8];
+  HOLD_TIME_TO_COOL_VALVES = data[9];
+
+  PRESSURE_FIRM = data[10];
+  PRESSURE_SITTING = data[11];
+  PRESSURE_RELEASED = data[12];
+  PRESSURE_MAX = data[13];
+  PRESSURE_HYSTERESIS = data[14];
+
+  MIN_MATTRESS_TEMP_C = data[15];
+  MAX_MATTRESS_TEMP_C = data[16];
+  MAX_MATTRESS_RH = data[17];
+  DELTA_TEMPERATURE_C = data[18];
+  HEATSINK_MAX_TEMP_C = data[19];
+
+  saveSettings();
+}
+
 function loadALLData(receivedString) {
   var dataLength = Math.floor(receivedString.length/3);
   const buffer = new ArrayBuffer(dataLength);
@@ -1034,6 +1117,7 @@ function loadALLData(receivedString) {
   degreeHipToThighs = data[27];
 
   // Show ALL information on the User Info setting screen
+  saveSettings();
 }
 
 function updateAndSaveBodyData(receivedString) {
@@ -1088,7 +1172,7 @@ function saveSettings() {
     bResetToDefaults = false;
     setStaticPressure = 22;    
     setDurationRedistribute = 30;
-    setDurationAlternating = 10; minuteToNextAlternating = setDurationAlternating;
+    setDurationAlternating = 5; minuteToNextAlternating = setDurationAlternating;
     setAutoTurnAngle = 15;
     bNotToTurn = false;
     bNotToTurnRight = false;
@@ -1097,29 +1181,100 @@ function saveSettings() {
     bNotToMoveLeg = false;
     bCaregiverAlert = true;
     bFaultAlert = true;
+
+    bNoPillowMassage = false;
+    bNoCooling = false;
+    bRedistPlusAlter = true;
+
+    AUTOTURN_INTERVAL = 30;
+    NUMBER_OF_TURNS = 2;
+    SIDEBAG_FILL_INTERVAL = 15;
+    LEG_AIRBAG_INTERVAL = 30;
+    POSTURE_CHECK_INTERVAL = 120;
+    HOLD_TIME_TO_COOL_VALVES = 1;
+
+    PRESSURE_FIRM = 42;
+    PRESSURE_SITTING = PRESSURE_FIRM + 10;
+    PRESSURE_RELEASED = 16;
+    PRESSURE_MAX = 80;
+    PRESSURE_HYSTERESIS = 4;
+
+    MIN_MATTRESS_TEMP_C = 25;
+    MAX_MATTRESS_TEMP_C = 30;
+    MAX_MATTRESS_RH = 85;
+    DELTA_TEMPERATURE_C = 2;
+    HEATSINK_MAX_TEMP_C = 65;
   }
   
   // if weight is changed, also want to change and update the label of autofirm pressure. So have to always do it since we don't know what has been changed.
   setAutofirmPressure = 0.0022*weight*weight-0.1679*weight+29.226; // always setAutofirmPressure when weight changes
   if (setAutofirmPressure < setStaticPressure) setAutofirmPressure = setStaticPressure;
 
-  // update display
-  rangeStaticPressure.value = setStaticPressure + 10;
-  rangeAngleAutoturn.value = setAutoTurnAngle;
-  rangeDurationRedistribute.value = setDurationRedistribute;
-  rangeDurationAlternating.value = setDurationAlternating;
-  lblStaticPressure.innerHTML = rangeStaticPressure.value;
-  lblAngleAutoturn.innerHTML = rangeAngleAutoturn.value;
-  lblDurationRedistribute.innerHTML = rangeDurationRedistribute.value;
-  lblDurationAlternating.innerHTML = rangeDurationAlternating.value;
+  setDurationRedistribute = clampIntInRange(setDurationRedistribute, 15, 60);
+  setDurationAlternating = clampIntInRange(setDurationAlternating, 1, 15);
+  const staticPressureUi = clampIntInRange(setStaticPressure + 10, 25, 40);
+  setStaticPressure = staticPressureUi - 10;
 
-  document.getElementById("notToTurn").checked = (bNotToTurn) ? true : false;
-  document.getElementById("notToTurnRight").checked = (bNotToTurnRight) ? true : false;
-  document.getElementById("notToTurnLeft").checked = (bNotToTurnLeft) ? true : false;
-  document.getElementById("notToMoveBack").checked = (bNotToMoveBack) ? true : false;
-  document.getElementById("notToMoveLeg").checked = (bNotToMoveLeg) ? true : false;
-  document.getElementById("caregiverAlert").checked = (bCaregiverAlert) ? true : false;
-  document.getElementById("faultAlert").checked = (bFaultAlert) ? true : false;
+  AUTOTURN_INTERVAL = clampIntInRange(AUTOTURN_INTERVAL, 15, 60);
+  NUMBER_OF_TURNS = clampIntInRange(NUMBER_OF_TURNS, 1, 4);
+  SIDEBAG_FILL_INTERVAL = clampIntInRange(SIDEBAG_FILL_INTERVAL, 5, 20);
+  LEG_AIRBAG_INTERVAL = clampIntInRange(LEG_AIRBAG_INTERVAL, 15, 60);
+  POSTURE_CHECK_INTERVAL = clampIntInRange(POSTURE_CHECK_INTERVAL, 30, 120);
+  HOLD_TIME_TO_COOL_VALVES = clampIntInRange(HOLD_TIME_TO_COOL_VALVES, 1, 3);
+
+  PRESSURE_FIRM = clampIntInRange(PRESSURE_FIRM, 32, 52);
+  PRESSURE_SITTING = clampIntInRange(PRESSURE_SITTING, PRESSURE_FIRM, PRESSURE_FIRM + 20);
+  PRESSURE_RELEASED = clampIntInRange(PRESSURE_RELEASED, 10, staticPressureUi);
+  PRESSURE_MAX = clampIntInRange(PRESSURE_MAX, 60, 80);
+  PRESSURE_HYSTERESIS = clampIntInRange(PRESSURE_HYSTERESIS, 2, 8);
+
+  MIN_MATTRESS_TEMP_C = clampIntInRange(MIN_MATTRESS_TEMP_C, 22, 30);
+  MAX_MATTRESS_TEMP_C = clampIntInRange(MAX_MATTRESS_TEMP_C, 25, 33);
+  MAX_MATTRESS_RH = clampIntInRange(MAX_MATTRESS_RH, 50, 95);
+  DELTA_TEMPERATURE_C = clampIntInRange(DELTA_TEMPERATURE_C, 0, 5);
+  HEATSINK_MAX_TEMP_C = clampIntInRange(HEATSINK_MAX_TEMP_C, 65, 75);
+
+  // update display
+  setValue("rangeStaticPressure", staticPressureUi);
+  setValue("rangeDurationRedistribute", setDurationRedistribute);
+  setValue("rangeDurationAlternating", setDurationAlternating);
+  if (lblStaticPressure) lblStaticPressure.innerHTML = String(staticPressureUi);
+  if (lblDurationRedistribute) lblDurationRedistribute.innerHTML = String(setDurationRedistribute);
+  if (lblDurationAlternating) lblDurationAlternating.innerHTML = String(setDurationAlternating);
+
+  setChecked("notToTurn", bNotToTurn);
+  setChecked("notToTurnRight", bNotToTurnRight);
+  setChecked("notToTurnLeft", bNotToTurnLeft);
+  setChecked("notToMoveBack", bNotToMoveBack);
+  setChecked("notToMoveLeg", bNotToMoveLeg);
+  setChecked("caregiverAlert", bCaregiverAlert);
+  setChecked("faultAlert", bFaultAlert);
+
+  setChecked("noPillowMassage", bNoPillowMassage);
+  setChecked("noCooling", bNoCooling);
+  setChecked("redistPlusAlter", bRedistPlusAlter);
+
+  setValue("taAutoturnInterval", AUTOTURN_INTERVAL);
+  setValue("taNumberOfTurns", NUMBER_OF_TURNS);
+  setValue("taSidebagFillInterval", SIDEBAG_FILL_INTERVAL);
+  setValue("taLegAirbagInterval", LEG_AIRBAG_INTERVAL);
+  setValue("taPostureCheckInterval", POSTURE_CHECK_INTERVAL);
+  setValue("taHoldTimeToCoolValves", HOLD_TIME_TO_COOL_VALVES);
+
+  setValue("taPressureFirm", PRESSURE_FIRM);
+  setValue("taPressureSitting", PRESSURE_SITTING);
+  setValue("taPressureReleased", PRESSURE_RELEASED);
+  setValue("taPressureMax", PRESSURE_MAX);
+  setValue("taPressureHysteresis", PRESSURE_HYSTERESIS);
+
+  setValue("taMinMattressTempC", MIN_MATTRESS_TEMP_C);
+  setValue("taMaxMattressTempC", MAX_MATTRESS_TEMP_C);
+  setValue("taMaxMattressRh", MAX_MATTRESS_RH);
+  setValue("taDeltaTemperatureC", DELTA_TEMPERATURE_C);
+  setValue("taHeatsinkMaxTempC", HEATSINK_MAX_TEMP_C);
+
+  setMinMax("taPressureReleased", 10, staticPressureUi);
+  setMinMax("taPressureSitting", PRESSURE_FIRM, PRESSURE_FIRM + 20);
 
   // save to file
 
@@ -1352,6 +1507,7 @@ function executeSendPressureReleaseSettingToAIRBED() {
 function executeSettingChangedActions() {
   saveSettings();
   executeSendSettings();
+  executeSendSettingsExtended();
 }
 
 function executeSendMeasureBody() {
@@ -1364,6 +1520,19 @@ function executeSendSettings() {
   s += get3DigitString(setStaticPressure+10) + get3DigitString(setDurationRedistribute) + get3DigitString(setDurationAlternating);
   s += get3DigitString(setAutoTurnAngle) + get3DigitString(bNotToTurn?1:0) + get3DigitString(bNotToTurnRight?1:0) + get3DigitString(bNotToTurnLeft?1:0);
   s += get3DigitString(bNotToMoveBack?1:0) + get3DigitString(bNotToMoveLeg?1:0) + get3DigitString(bCaregiverAlert?1:0) + get3DigitString(bFaultAlert?1:0);
+  writeOnCharacteristic(s);
+}
+
+function executeSendSettingsExtended() {
+  var s = "#SETX";
+  s += get3DigitString(1);
+  s += get3DigitString(bNoPillowMassage?1:0) + get3DigitString(bNoCooling?1:0) + get3DigitString(bRedistPlusAlter?1:0);
+  s += get3DigitString(AUTOTURN_INTERVAL) + get3DigitString(NUMBER_OF_TURNS);
+  s += get3DigitString(SIDEBAG_FILL_INTERVAL) + get3DigitString(LEG_AIRBAG_INTERVAL) + get3DigitString(POSTURE_CHECK_INTERVAL) + get3DigitString(HOLD_TIME_TO_COOL_VALVES);
+  s += get3DigitString(PRESSURE_FIRM) + get3DigitString(PRESSURE_SITTING) + get3DigitString(PRESSURE_RELEASED);
+  s += get3DigitString(PRESSURE_MAX) + get3DigitString(PRESSURE_HYSTERESIS);
+  s += get3DigitString(MIN_MATTRESS_TEMP_C) + get3DigitString(MAX_MATTRESS_TEMP_C) + get3DigitString(MAX_MATTRESS_RH);
+  s += get3DigitString(DELTA_TEMPERATURE_C) + get3DigitString(HEATSINK_MAX_TEMP_C);
   writeOnCharacteristic(s);
 }
 
@@ -1394,6 +1563,41 @@ function getDateTime() {
   return datetime;
 }
 
+function clampByte(n) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return 0;
+  if (v < 0) return 0;
+  if (v > 255) return 255;
+  return v;
+}
+
+function clampIntInRange(n, min, max) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return min;
+  if (v < min) return min;
+  if (v > max) return max;
+  return v;
+}
+
+function setChecked(id, checked) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.checked = !!checked;
+}
+
+function setValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = String(value);
+}
+
+function setMinMax(id, min, max) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.min = String(min);
+  el.max = String(max);
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   if (!window.SmartbedUICommon) return;
   window.SmartbedUICommon.init({
@@ -1405,22 +1609,60 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 function changeSliderSetting(setting) {
-  if (setting == "rangeStaticPressure") {setStaticPressure = Number(document.getElementById(setting).value) - 10; lblStaticPressure.innerHTML = document.getElementById(setting).value;}
-  else if (setting == "rangeAngleAutoturn") {setAutoTurnAngle = Number(document.getElementById(setting).value); lblAngleAutoturn.innerHTML = document.getElementById(setting).value;}
-  else if (setting == "rangeDurationRedistribute") {setDurationRedistribute = Number(document.getElementById(setting).value); lblDurationRedistribute.innerHTML = document.getElementById(setting).value;}
-  else if (setting == "rangeDurationAlternating") {setDurationAlternating = Number(document.getElementById(setting).value); lblDurationAlternating.innerHTML = document.getElementById(setting).value;}
+  const el = document.getElementById(setting);
+  if (!el) return;
+  const v = Number(el.value);
+
+  if (setting == "rangeStaticPressure") {
+    const ui = clampIntInRange(v, 25, 40);
+    setStaticPressure = ui - 10;
+    el.value = String(ui);
+    if (lblStaticPressure) lblStaticPressure.innerHTML = el.value;
+  }
+  else if (setting == "rangeDurationRedistribute") {
+    setDurationRedistribute = clampIntInRange(v, 15, 60);
+    el.value = String(setDurationRedistribute);
+    if (lblDurationRedistribute) lblDurationRedistribute.innerHTML = el.value;
+  }
+  else if (setting == "rangeDurationAlternating") {
+    setDurationAlternating = clampIntInRange(v, 1, 15);
+    el.value = String(setDurationAlternating);
+    if (lblDurationAlternating) lblDurationAlternating.innerHTML = el.value;
+  }
+  else if (setting == "taAutoturnInterval") {AUTOTURN_INTERVAL = clampIntInRange(v, 15, 60); el.value = String(AUTOTURN_INTERVAL);}
+  else if (setting == "taNumberOfTurns") {NUMBER_OF_TURNS = clampIntInRange(v, 1, 4); el.value = String(NUMBER_OF_TURNS);}
+  else if (setting == "taSidebagFillInterval") {SIDEBAG_FILL_INTERVAL = clampIntInRange(v, 5, 20); el.value = String(SIDEBAG_FILL_INTERVAL);}
+  else if (setting == "taLegAirbagInterval") {LEG_AIRBAG_INTERVAL = clampIntInRange(v, 15, 60); el.value = String(LEG_AIRBAG_INTERVAL);}
+  else if (setting == "taPostureCheckInterval") {POSTURE_CHECK_INTERVAL = clampIntInRange(v, 30, 120); el.value = String(POSTURE_CHECK_INTERVAL);}
+  else if (setting == "taHoldTimeToCoolValves") {HOLD_TIME_TO_COOL_VALVES = clampIntInRange(v, 1, 3); el.value = String(HOLD_TIME_TO_COOL_VALVES);}
+  else if (setting == "taPressureFirm") {PRESSURE_FIRM = clampIntInRange(v, 32, 52); el.value = String(PRESSURE_FIRM);}
+  else if (setting == "taPressureSitting") {PRESSURE_SITTING = clampIntInRange(v, PRESSURE_FIRM, PRESSURE_FIRM + 20); el.value = String(PRESSURE_SITTING);}
+  else if (setting == "taPressureReleased") {PRESSURE_RELEASED = clampIntInRange(v, 10, setStaticPressure + 10); el.value = String(PRESSURE_RELEASED);}
+  else if (setting == "taPressureMax") {PRESSURE_MAX = clampIntInRange(v, 60, 80); el.value = String(PRESSURE_MAX);}
+  else if (setting == "taPressureHysteresis") {PRESSURE_HYSTERESIS = clampIntInRange(v, 2, 8); el.value = String(PRESSURE_HYSTERESIS);}
+  else if (setting == "taMinMattressTempC") {MIN_MATTRESS_TEMP_C = clampIntInRange(v, 22, 30); el.value = String(MIN_MATTRESS_TEMP_C);}
+  else if (setting == "taMaxMattressTempC") {MAX_MATTRESS_TEMP_C = clampIntInRange(v, 25, 33); el.value = String(MAX_MATTRESS_TEMP_C);}
+  else if (setting == "taMaxMattressRh") {MAX_MATTRESS_RH = clampIntInRange(v, 50, 95); el.value = String(MAX_MATTRESS_RH);}
+  else if (setting == "taDeltaTemperatureC") {DELTA_TEMPERATURE_C = clampIntInRange(v, 0, 5); el.value = String(DELTA_TEMPERATURE_C);}
+  else if (setting == "taHeatsinkMaxTempC") {HEATSINK_MAX_TEMP_C = clampIntInRange(v, 65, 75); el.value = String(HEATSINK_MAX_TEMP_C);}
 
   executeSettingChangedActions();
 }
 
 function checkbox_click(clicked) {
-  if (clicked == "notToTurn") bNotToTurn = (document.getElementById("notToTurn").checked) ? true : false;
-  else if (clicked == "notToTurnRight") bNotToTurnRight = (document.getElementById("notToTurnRight").checked) ? true : false;
-  else if (clicked == "notToTurnLeft") bNotToTurnLeft = (document.getElementById("notToTurnLeft").checked) ? true : false;
-  else if (clicked == "notToMoveBack") bNotToMoveBack = (document.getElementById("notToMoveBack").checked) ? true : false;
-  else if (clicked == "notToMoveLeg") bNotToMoveLeg = (document.getElementById("notToMoveLeg").checked) ? true : false;
-  else if (clicked == "caregiverAlert") bCaregiverAlert = (document.getElementById("caregiverAlert").checked) ? true : false;
-  else if (clicked == "faultAlert") bFaultAlert = (document.getElementById("faultAlert").checked) ? true : false;
+  const el = document.getElementById(clicked);
+  const checked = !!(el && el.checked);
+
+  if (clicked == "notToTurn") bNotToTurn = checked;
+  else if (clicked == "notToTurnRight") bNotToTurnRight = checked;
+  else if (clicked == "notToTurnLeft") bNotToTurnLeft = checked;
+  else if (clicked == "notToMoveBack") bNotToMoveBack = checked;
+  else if (clicked == "notToMoveLeg") bNotToMoveLeg = checked;
+  else if (clicked == "caregiverAlert") bCaregiverAlert = checked;
+  else if (clicked == "faultAlert") bFaultAlert = checked;
+  else if (clicked == "noPillowMassage") bNoPillowMassage = checked;
+  else if (clicked == "noCooling") bNoCooling = checked;
+  else if (clicked == "redistPlusAlter") bRedistPlusAlter = checked;
 
   executeSettingChangedActions();
 }

@@ -524,6 +524,88 @@ input:checked + .slider:before {
   transform: rotate(270deg)
 }
 
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    align-items: start;
+}
+
+.settings-col {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.settings-col-title {
+    color: orange;
+    text-align: left;
+    margin-bottom: 6px;
+}
+
+.settings-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+    color: white;
+    text-align: left;
+}
+
+.settings-check input {
+    width: 16px;
+    height: 16px;
+}
+
+.settings-row {
+    display: grid;
+    grid-template-columns: 1fr 56px 56px;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0;
+    color: white;
+}
+
+.settings-row label {
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.settings-row input {
+    width: 56px;
+    padding: 1px 6px;
+    background-color: rgb(40, 40, 40);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 6px;
+    text-align: right;
+}
+
+.settings-unit {
+    text-align: right;
+    min-width: 56px;
+    color: lightgrey;
+    white-space: nowrap;
+}
+
+.settings-subtitle {
+    margin-top: 6px;
+    margin-bottom: 2px;
+    color: orange;
+    opacity: 0.9;
+}
+
+.settings-value {
+    display: none;
+}
+
 .panelAirCell {
     position: absolute;
     border-radius: 5px;
