@@ -922,21 +922,22 @@ function loadAndShowPVSData(receivedString) {
   panelA3.style.backgroundColor = channelColour[ACellColourCode[2]];
   panelA4.style.backgroundColor = channelColour[ACellColourCode[3]];
   panelA5.style.backgroundColor = channelColour[ACellColourCode[4]];
-  panelA6Left.style.backgroundColor = channelColour[ACellColourCode[5]];
-  panelA6Right.style.backgroundColor = channelColour[ACellColourCode[5]];
+  panelA6.style.backgroundColor = channelColour[ACellColourCode[5]];
+  panelA7.style.backgroundColor = channelColour[ACellColourCode[5]];
   panelB1.style.backgroundColor = channelColour[BCellColourCode[0]];
   panelB2.style.backgroundColor = channelColour[BCellColourCode[1]];
   panelB3.style.backgroundColor = channelColour[BCellColourCode[2]];
   panelB4.style.backgroundColor = channelColour[BCellColourCode[3]];
   panelB5.style.backgroundColor = channelColour[BCellColourCode[4]];
-  panelB6Left.style.backgroundColor = channelColour[BCellColourCode[5]];
-  panelB6Right.style.backgroundColor = channelColour[BCellColourCode[5]];
+  panelB6.style.backgroundColor = channelColour[BCellColourCode[5]];
+  panelB7.style.backgroundColor = channelColour[BCellColourCode[5]];
   panelC1.style.backgroundColor = channelColour[CCellColourCode[0]];
   panelC2.style.backgroundColor = channelColour[CCellColourCode[1]];
   panelC3.style.backgroundColor = channelColour[CCellColourCode[2]];
   panelC4.style.backgroundColor = channelColour[CCellColourCode[3]];
-  panelC6Left.style.backgroundColor = channelColour[CCellColourCode[5]];
-  panelC6Right.style.backgroundColor = channelColour[CCellColourCode[5]];
+  panelC5.style.backgroundColor = channelColour[CCellColourCode[4]];
+  panelC6.style.backgroundColor = channelColour[CCellColourCode[5]];
+  panelC7.style.backgroundColor = channelColour[CCellColourCode[5]];
 }
 
 function loadPRSData(receivedString) {
@@ -1181,9 +1182,6 @@ function updateUserInfoToDisplay() {
 
   if (iHeight > 100) fBMI = iWeight * 10000 / (iHeight * iHeight);
   iBradenScore = valueSensory + valueMoisture + valueActivity + valueMobility + valueNutrition + valueShear;
-  //lblBradenScore.textContent = String(valueSensory + valueMoisture + valueActivity + valueMobility + valueNutrition + valueShear);
-  if (iHeight > 100) fBMI = iWeight * 10000 / (iHeight * iHeight);
-  //lblBMI.textContent = parseFloat(String(fBMI)).toFixed(2);
 
   document.getElementById("taBodyPercent").textContent = String(percentPressurePoints);
   document.getElementById("taBodyWidth").textContent = String(midBodyWidth);

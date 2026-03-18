@@ -42,7 +42,7 @@
         <div id="navBar" class="w3-bar w3-dark-grey w3-card w3-left-align w3-medium">
           <a class="w3-bar-item w3-button w3-hide-medium w3-hide-large w3-right w3-padding w3-hover-white w3-medium w3-dark-grey" href="javascript:void(0);" onclick="toggleMenu()" title="Toggle Navigation Menu"><i class="fa fa-bars"></i></a>
           <a href="#" class="w3-bar-item w3-button w3-padding w3-white" id="bleButton" onclick="button_click(this.id)">BLE Connect</a>
-          <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="bedButton" onclick="button_click(this.id)">Bed</a>
+          <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="bedButton" data-workflow="developer" onclick="button_click(this.id)">Bed</a>
           <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="airmattressButton" onclick="button_click(this.id)">Air Mattress</a>
           <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="pressuremapButton" onclick="button_click(this.id)">Pressure Map</a>
           <a href="#" class="w3-bar-item w3-button w3-hide-small w3-padding w3-hover-white" id="settingButton" onclick="button_click(this.id)">Setting</a>
@@ -50,7 +50,7 @@
 
         <!-- Navbar on small screens -->
         <div id="navDemo" class="w3-bar-block w3-dark-grey w3-hide w3-hide-large w3-hide-medium w3-medium">
-          <a href="#" class="w3-bar-item w3-button w3-padding" id="bedButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Bed</a>
+          <a href="#" class="w3-bar-item w3-button w3-padding" id="bedButton" data-workflow="developer" onClick="button_click(this.id)" onmouseup="toggleMenu()">Bed</a>
           <a href="#" class="w3-bar-item w3-button w3-padding" id="airmattressButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Air Mattress</a>
           <a href="#" class="w3-bar-item w3-button w3-padding" id="pressuremapButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Pressure Map</a>
           <a href="#" class="w3-bar-item w3-button w3-padding" id="settingButton" onClick="button_click(this.id)" onmouseup="toggleMenu()">Setting</a>
@@ -76,6 +76,7 @@
         </div>
       </div>
 
+      <!-- Develop the common containers here and copy to the section in WebSerial_NS/index.html-->
       <!-- User Information -->
       <a name="userInformationScreen"> </a>
       <div id="userInformationContainer" class="w3-container w3-dark-grey w3-center" style="width:auto; height:480px; padding:56px 16px">
@@ -279,7 +280,7 @@
                 <option value="5">Autofirm</option>
             </select>
           </div>
-          <button type="button" id="bedIcon" class="icon bedButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_snb_50x45.jpg" alt="bed icon" draggable="false"> </button>
+          <button type="button" id="bedIcon" data-workflow="developer" class="icon bedButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_snb_50x45.jpg" alt="bed icon" draggable="false"> </button>
           <button type="button" id="airmattressIcon" class="icon airmattressButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_airmattress_50x45.jpg" alt="air mattress icon" draggable="false"> </button>
           <button type="button" id="pressuremapIcon" class="icon pressuremapButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_pressure_50x45.jpg" alt="pressure map icon" draggable="false"> </button>
           <button type="button" id="settingIcon" class="icon settingButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_setting_50x45.jpg" alt="setting icon" draggable="false"> </button>
@@ -326,40 +327,68 @@
             <div id="airmattressContainer">
               <!-- Static -->
               <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Air Mattress</p>
-              <img src="asset/bg_mattress322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
-              <img src="asset/exhaustBlocked21x15.jpg" alt="exhaust" id="imgExhaustBlocked" style="position:absolute; left:675px; top:312px; width:42px; height:auto">
-              <!-- Show -->        
-              <p id="lblPressurePump" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:90px">32</p>
-              <p id="lblPressureMainA" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:154px">32</p>
-              <p id="lblPressureMainB" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:212px">32</p>
-              <p id="lblPressureMainC" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:274px">32</p>  
-              <p id="lblPressurePillow" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:520px; top:252px">32</p>      
-              <p id="panelA1" class="panelAirCell" style="left:66px; top:175px; width:30px; height:100px"></p>
-              <p id="panelB1" class="panelAirCell" style="left:96px; top:175px; width:30px; height:100px"></p>
-              <p id="panelC1" class="panelAirCell" style="left:126px; top:175px; width:30px; height:100px"></p>
-              <p id="panelA2" class="panelAirCell" style="left:160px; top:175px; width:30px; height:100px"></p>
-              <p id="panelB2" class="panelAirCell" style="left:190px; top:175px; width:30px; height:100px"></p>
-              <p id="panelC2" class="panelAirCell" style="left:224px; top:175px; width:30px; height:100px"></p>
-              <p id="panelA3" class="panelAirCell" style="left:254px; top:175px; width:30px; height:100px"></p>
-              <p id="panelB3" class="panelAirCell" style="left:284px; top:175px; width:30px; height:100px"></p>
-              <p id="panelC3" class="panelAirCell" style="left:314px; top:175px; width:30px; height:100px"></p>
-              <p id="panelA4" class="panelAirCell" style="left:344px; top:175px; width:30px; height:100px"></p>
-              <p id="panelB4" class="panelAirCell" style="left:378px; top:175px; width:30px; height:100px"></p>
-              <p id="panelC4" class="panelAirCell" style="left:410px; top:175px; width:30px; height:100px"></p>
-              <p id="panelA5" class="panelAirCell" style="left:440px; top:175px; width:30px; height:100px"></p>
-              <p id="panelB5" class="panelAirCell" style="left:470px; top:175px; width:30px; height:100px"></p>
-              <p id="panelA6Right" class="panelAirCell" style="left:66px; top:140px; width:160px; height:40px"></p>
-              <p id="panelA6Left" class="panelAirCell" style="left:66px; top:272px; width:160px; height:40px"></p>
-              <p id="panelB6Right" class="panelAirCell" style="left:221px; top:140px; width:130px; height:40px"></p>
-              <p id="panelB6Left" class="panelAirCell" style="left:221px; top:272px; width:130px; height:40px"></p>
-              <p id="panelC6Right" class="panelAirCell" style="left:350px; top:140px; width:150px; height:40px"></p>
-              <p id="panelC6Left" class="panelAirCell" style="left:350px; top:272px; width:150px; height:40px"></p>
-              <p id="panelMainA" class="panelAirCell" style="left:580px; top:135px; width:64px; height:57px"></p>
-              <p id="panelMainB" class="panelAirCell" style="left:580px; top:195px; width:64px; height:57px"></p>
-              <p id="panelMainC" class="panelAirCell" style="left:580px; top:255px; width:64px; height:57px"></p>
-              <p id="panelPump" class="panelAirCell" style="left:570px; top:70px; width:140px; height:60px"></p>
-              <p id="panelPump1" class="panelAirCell" style="left:682px; top:130px; width:30px; height:186px"></p>
-              
+              <img id="imgMattressDev" data-workflow="developer" src="asset/bg_mattress_dev322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
+              <img id="imgMattressUser" data-workflow="user" src="asset/bg_mattress_user322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
+              <img id="imgExhaustBlocked" data-workflow="developer" src="asset/exhaustBlocked21x15.jpg" alt="exhaust" style="position:absolute; left:675px; top:312px; width:42px; height:auto">
+              <!-- Show -->
+              <p id="panelMainA" data-workflow="developer" class="panelAirCell" style="left:580px; top:137px; width:64px; height:57px"></p>
+              <p id="panelMainB" data-workflow="developer" class="panelAirCell" style="left:580px; top:197px; width:64px; height:57px"></p>
+              <p id="panelMainC" data-workflow="developer" class="panelAirCell" style="left:580px; top:257px; width:64px; height:57px"></p>
+              <p id="panelPump" data-workflow="developer" class="panelAirCell" style="left:570px; top:75px; width:140px; height:57px"></p>
+              <p id="panelPump1" data-workflow="developer" class="panelAirCell" style="left:683px; top:130px; width:28px; height:184px"></p>        
+              <p id="lblPressurePump" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:90px">32</p>
+              <p id="lblPressureMainA" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:154px">32</p>
+              <p id="lblPressureMainB" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:212px">32</p>
+              <p id="lblPressureMainC" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:274px">32</p>  
+              <p id="lblPressurePillow" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:523px; top:245px">32</p>
+              <p id="lblPressureA1" class="w3-small w3-text-black setVisibility" style="position:absolute; left:73px; top:231px">32</p>
+              <p id="lblPressureB1" class="w3-small w3-text-black setVisibility" style="position:absolute; left:100px; top:231px">32</p>
+              <p id="lblPressureC1" class="w3-small w3-text-black setVisibility" style="position:absolute; left:128px; top:231px">32</p>
+              <p id="lblPressureA2" class="w3-small w3-text-black setVisibility" style="position:absolute; left:153px; top:231px">32</p>
+              <p id="lblPressureB2" class="w3-small w3-text-black setVisibility" style="position:absolute; left:183px; top:231px">32</p>
+              <p id="lblPressureC2" class="w3-small w3-text-black setVisibility" style="position:absolute; left:210px; top:231px">32</p>
+              <p id="lblPressureA3" class="w3-small w3-text-black setVisibility" style="position:absolute; left:237px; top:231px">32</p>
+              <p id="lblPressureB3" class="w3-small w3-text-black setVisibility" style="position:absolute; left:263px; top:231px">32</p>
+              <p id="lblPressureC3" class="w3-small w3-text-black setVisibility" style="position:absolute; left:290px; top:231px">32</p>
+              <p id="lblPressureA4" class="w3-small w3-text-black setVisibility" style="position:absolute; left:317px; top:231px">32</p>
+              <p id="lblPressureB4" class="w3-small w3-text-black setVisibility" style="position:absolute; left:345px; top:231px">32</p>
+              <p id="lblPressureC4" class="w3-small w3-text-black setVisibility" style="position:absolute; left:371px; top:231px">32</p>
+              <p id="lblPressureA5" class="w3-small w3-text-black setVisibility" style="position:absolute; left:397px; top:231px">32</p>
+              <p id="lblPressureB5" class="w3-small w3-text-black setVisibility" style="position:absolute; left:424px; top:231px">32</p>
+              <p id="lblPressureC5" class="w3-small w3-text-black setVisibility" style="position:absolute; left:466px; top:231px">32</p>
+              <p id="lblPressureA6" class="w3-small w3-text-black setVisibility" style="position:absolute; left:125px; top:285px">32</p>
+              <p id="lblPressureB6" class="w3-small w3-text-black setVisibility" style="position:absolute; left:250px; top:285px">32</p>
+              <p id="lblPressureC6" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:285px">32</p>
+              <p id="lblPressureA7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:125px; top:145px">32</p>
+              <p id="lblPressureB7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:250px; top:145px">32</p>
+              <p id="lblPressureC7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:145px">32</p>
+              <p id="lblPressureRight" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:165px">32</p>
+              <p id="lblPressureLeft" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:272px">32</p>
+              <p id="lblPressureLeg" class="w3-small w3-text-black setVisibility" style="position:absolute; left:164px; top:165px">32</p>
+              <p id="panelA1" class="panelAirCell" style="left:66px; top:175px; width:29px; height:100px"></p>
+              <p id="panelB1" class="panelAirCell" style="left:95px; top:175px; width:29px; height:100px"></p>
+              <p id="panelC1" class="panelAirCell" style="left:124px; top:175px; width:29px; height:100px"></p>
+              <p id="panelA2" class="panelAirCell" style="left:147px; top:175px; width:29px; height:100px"></p>
+              <p id="panelB2" class="panelAirCell" style="left:178px; top:175px; width:29px; height:100px"></p>
+              <p id="panelC2" class="panelAirCell" style="left:205px; top:175px; width:29px; height:100px"></p>
+              <p id="panelA3" class="panelAirCell" style="left:232px; top:175px; width:29px; height:100px"></p>
+              <p id="panelB3" class="panelAirCell" style="left:258px; top:175px; width:29px; height:100px"></p>
+              <p id="panelC3" class="panelAirCell" style="left:285px; top:175px; width:29px; height:100px"></p>
+              <p id="panelA4" class="panelAirCell" style="left:312px; top:175px; width:29px; height:100px"></p>
+              <p id="panelB4" class="panelAirCell" style="left:341px; top:175px; width:29px; height:100px"></p>
+              <p id="panelC4" class="panelAirCell" style="left:366px; top:175px; width:29px; height:100px"></p>
+              <p id="panelA5" class="panelAirCell" style="left:392px; top:175px; width:29px; height:100px"></p>
+              <p id="panelB5" class="panelAirCell" style="left:419px; top:175px; width:29px; height:100px"></p>
+              <p id="panelC5" class="panelAirCell" style="left:448px; top:175px; width:55px; height:100px"></p>
+              <p id="panelA6" class="panelAirCell" style="left:66px; top:272px; width:110px; height:40px"></p>
+              <p id="panelB6" class="panelAirCell" style="left:176px; top:272px; width:110px; height:40px"></p>
+              <p id="panelC6" class="panelAirCell" style="left:286px; top:272px; width:215px; height:40px"></p>
+              <p id="panelA7" class="panelAirCell" style="left:66px; top:140px; width:110px; height:40px"></p>
+              <p id="panelB7" class="panelAirCell" style="left:176px; top:140px; width:110px; height:40px"></p>
+              <p id="panelC7" class="panelAirCell" style="left:286px; top:140px; width:215px; height:40px"></p>
+              <p id="panelRight" class="panelAirCell" style="left:320px; top:160px; width:152px; height:45px"></p>
+              <p id="panelLeft" class="panelAirCell" style="left:320px; top:245px; width:152px; height:45px"></p>
+              <p id="panelLeg" class="panelAirCell" style="left:156px; top:160px; width:38px; height:130px"></p>              
               <!-- Control -->
             </div>
 
@@ -386,6 +415,13 @@
               <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Setting</p>
               <!-- Show -->
               <!-- Control -->
+              <div class="w3-small" style="position:absolute; left:50%; top:18px; transform:translateX(-50%); color:white; white-space:nowrap">
+                <span>Workflow:</span>
+                <select id="workflowMode" style="margin-left:6px; padding:2px 6px" onchange="if (window.SmartbedUICommon) window.SmartbedUICommon.setWorkflowMode(this.value)">
+                  <option value="user" selected="selected">User</option>
+                  <option value="developer">Developer</option>
+                </select>
+              </div>
               <button id="defaultValues" onclick="setDefaultValues()" class="animatedButton w3-small" style="position:absolute; left:30px; top:62px">Default Values</button>
               <button id="userInformation" onclick="setUserInformation()" class="animatedButton w3-small" style="position:absolute; left:215px; top:62px">User Information</button>
               <button id="smartbedControl" onclick="setSmartbedControl()"class="animatedButton w3-small" style="position:absolute; left:415px; top:62px">Smartbed Control</button>
@@ -456,7 +492,8 @@
         <p>You may contact Mr. Lin Liutong.</p> 
         <a class="w3-button w3-round-xxlarge w3-black w3-margin-bottom" href="#" target="_blank">Contact Us</a>
         <!-- Footer end. -->
-      </footer>      
+      </footer>
+      <!-- End of the Container block to be copied to WebSerial_NS/index.html -->    
 
       <div id="updateBanner" style="display:none; position:fixed; left:0; right:0; bottom:0; background:#111827; color:#ffffff; padding:10px 12px; z-index:9999; font-family:Arial, Helvetica, sans-serif; text-align:left">
         <span id="updateBannerText">Update available.</span>

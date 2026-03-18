@@ -26,6 +26,50 @@ The project is intentionally split into:
 
 This pattern keeps **UI navigation rules in one place** while allowing each app to supply its own “how to send a command” implementation.
 
+## Workflow mode (User vs Developer)
+
+Workflow mode is a UI “profile” that changes which controls are visible (and which screens are allowed).
+
+- Persistence key: `localStorage["smartbed.workflowMode"]` (`"user"` or `"developer"`)
+- UI switch: `#workflowMode` on the **Setting** page
+- DOM marker: the active mode is reflected as an attribute on `<html>`:
+  - Developer: `html[data-workflow-mode="developer"]`
+  - User: `html[data-workflow-mode="user"]`
+
+### Show/hide elements with `data-workflow`
+
+Any element can be gated with:
+
+- Developer-only: `data-workflow="developer"`
+- User-only: `data-workflow="user"`
+
+The shared UI code toggles these elements by setting `style.display = "none"` for the inactive workflow.
+
+### Hide an entire page in User mode (recommended)
+
+To hide a whole tab/page in User mode:
+
+1. Mark the **navbar tab** as developer-only:
+   - `id="bedButton"` (and its duplicate in the small-screen menu) → add `data-workflow="developer"`
+2. Mark the corresponding **bottom icon** as developer-only:
+   - `id="bedIcon"` → add `data-workflow="developer"`
+
+The shared UI logic will:
+
+- Prevent navigation into developer-only pages in User mode.
+- “Pack” the remaining bottom icons to the right so gaps are removed.
+
+Implementation: [smartbed_ui_common.js](file:///f:/PlatformIO/Projects/Smartbed/WebBLE_GUI/common/smartbed_ui_common.js)
+
+## Air Mattress: separate layouts without duplicating HTML
+
+Air Mattress uses one set of element IDs (panels + labels) so the JS can update them consistently.
+
+- Developer layout: defined by inline `style="left/top/width/height"` in [index.html](file:///f:/PlatformIO/Projects/Smartbed/WebBLE_GUI/index.html)
+- User layout: defined as CSS overrides that only apply in User mode
+  - Selector pattern: `html[data-workflow-mode="user"] #airmattressContainer #panelA1 { ... !important; }`
+  - File: [style.css](file:///f:/PlatformIO/Projects/Smartbed/WebBLE_GUI/src/style.css)
+
 ## Adding a new page/tab (recommended pattern)
 
 1. In `index.html`, add a new container `<div id="yourNewContainer">...</div>` and a button in the navbar that calls `button_click(this.id)`.
@@ -41,6 +85,12 @@ The service worker ([sw.js](file:///f:/PlatformIO/Projects/Smartbed/WebBLE_GUI/s
 - Pre-caching the core files (HTML/CSS/JS/icons) so the app can start even if the network is slow or briefly unavailable.
 - Intercepting requests and serving cached files when appropriate (especially for app startup/navigation).
 - Enabling the browser to treat the site like an app together with the manifest ([manifest.webmanifest](file:///f:/PlatformIO/Projects/Smartbed/WebBLE_GUI/manifest.webmanifest)).
+
+### Install on Android Phone (Chrome / Edge)
+
+- Open your GitHub Pages URL to .../WebBLE_GUI/index.html in Chrome
+- Menu → Install app (or “Add to Home screen”)
+- Launch from the new icon → it runs standalone (no URL bar)
 
 ### Install on PC (Chrome / Edge)
 

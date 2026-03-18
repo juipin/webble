@@ -1,3 +1,6 @@
+/*
+  App-wide startup helpers used by both WebBLE_GUI and WebSerial_NS.
+*/
 (function () {
   const byId = (id) => document.getElementById(id);
   const hide = (id) => {
@@ -28,6 +31,30 @@
     showV("lblPressureMainB");
     showV("lblPressureMainC");
     showV("lblPressurePillow");
+    showV("lblPressureA1");
+    showV("lblPressureB1");
+    showV("lblPressureC1");
+    showV("lblPressureA2");
+    showV("lblPressureB2");
+    showV("lblPressureC2");
+    showV("lblPressureA3");
+    showV("lblPressureB3");
+    showV("lblPressureC3");
+    showV("lblPressureA4");
+    showV("lblPressureB4");
+    showV("lblPressureC4");
+    showV("lblPressureA5");
+    showV("lblPressureB5");
+    showV("lblPressureC5");
+    showV("lblPressureA6");
+    showV("lblPressureB6");
+    showV("lblPressureC6");
+    showV("lblPressureA7");
+    showV("lblPressureB7");
+    showV("lblPressureC7");
+    showV("lblPressureRight");
+    showV("lblPressureLeft");
+    showV("lblPressureLeg");
     showV("imgExhaustBlocked");
 
     bg("panelA1", "#FFA500");
@@ -44,12 +71,16 @@
     bg("panelC4", "#FFA500");
     bg("panelA5", "#FFA500");
     bg("panelB5", "#FFA500");
-    bg("panelA6Right", "#FFA500");
-    bg("panelA6Left", "#FFA500");
-    bg("panelB6Right", "#FFA500");
-    bg("panelB6Left", "#FFA500");
-    bg("panelC6Right", "#FFA500");
-    bg("panelC6Left", "#FFA500");
+    bg("panelC5", "#FFA500");
+    bg("panelA6", "#FFA500");
+    bg("panelB6", "#FFA500");
+    bg("panelC6", "#FFA500");
+    bg("panelA7", "#FFA500");
+    bg("panelB7", "#FFA500");
+    bg("panelC7", "#FFA500");
+    bg("panelRight", "#00ff88ff");
+    bg("panelLeft", "#00ff88ff");
+    bg("panelLeg", "#00ff88ff");
     bg("panelMainA", "#FFA500");
     bg("panelMainB", "#FFA500");
     bg("panelMainC", "#FFA500");

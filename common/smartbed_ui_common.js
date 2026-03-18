@@ -10,11 +10,13 @@
 (function () {
   const byId = (id) => document.getElementById(id);
 
-  const setDisplay = (el, value) => {
+  const STORAGE_KEY_WORKFLOW = "smartbed.workflowMode";
+
+  const setDisplay = (el, value) => { /* "none" or "block" for a container */
     if (el) el.style.display = value;
   };
 
-  const setSelected = (el, selected) => {
+  const setSelected = (el, selected) => { /* true or false for the bottom icon. When setSelected(icons.id, true), an orange frame is display around the icon. */
     if (!el) return;
     if (selected) el.classList.add("selected");
     else el.classList.remove("selected");
@@ -23,6 +25,81 @@
   const api = {};
 
   const ensureInit = () => api._ctx;
+
+  const isAllowedInMode = (el, mode) => {
+    if (!el) return true;
+    const wf = el.getAttribute("data-workflow");
+    if (!wf) return true;
+    return wf === mode;
+  };
+
+  const packBottomIcons = (ctx) => {
+    if (!ctx || !ctx.iconOrder || !ctx.iconSlots || ctx.iconSlots.length === 0) return;
+    const visible = ctx.iconOrder.filter((d) => d.el && window.getComputedStyle(d.el).display !== "none");
+    visible.forEach((d, idx) => {
+      d.el.style.right = ctx.iconSlots[idx] || ctx.iconSlots[ctx.iconSlots.length - 1];
+    });
+  };
+
+  api.getWorkflowMode = function () {
+    const v = (window.localStorage && localStorage.getItem(STORAGE_KEY_WORKFLOW)) || "user";
+    return v === "developer" ? "developer" : "user";
+  };
+
+  api.applyWorkflowMode = function (mode) {
+    const normalized = mode === "developer" ? "developer" : "user";
+    document.documentElement.dataset.workflowMode = normalized;
+    document.querySelectorAll('[data-workflow="developer"]').forEach((el) => {
+      el.style.display = normalized === "developer" ? "" : "none";
+    });
+    document.querySelectorAll('[data-workflow="user"]').forEach((el) => {
+      el.style.display = normalized === "user" ? "" : "none";
+    });
+
+    const select = byId("workflowMode");
+    if (select) select.value = normalized;
+
+    const ctx = ensureInit();
+    if (ctx) packBottomIcons(ctx);
+  };
+
+  api.setWorkflowMode = function (mode) {
+    const normalized = mode === "developer" ? "developer" : "user";
+    if (window.localStorage) localStorage.setItem(STORAGE_KEY_WORKFLOW, normalized);
+    api.applyWorkflowMode(normalized);
+
+    const ctx = ensureInit();
+    if (!ctx || typeof window.button_click !== "function") return;
+
+    const pickFallback = () => {
+      const candidates = ["airmattressButton", "pressuremapButton", "settingButton", "bedButton"];
+      for (const id of candidates) {
+        const el = byId(id);
+        if (isAllowedInMode(el, normalized)) return id;
+      }
+      return null;
+    };
+
+    const fallback = pickFallback();
+    if (!fallback) return;
+
+    const pages = [
+      { container: ctx.containers.bed, buttonId: "bedButton" },
+      { container: ctx.containers.airmattress, buttonId: "airmattressButton" },
+      { container: ctx.containers.pressuremap, buttonId: "pressuremapButton" },
+      { container: ctx.containers.setting, buttonId: "settingButton" },
+    ];
+
+    if (ctx.containers.allbeds) pages.push({ container: ctx.containers.allbeds, buttonId: ctx.nav.allbedsButtonId });
+
+    const current = pages.find((p) => p.container && p.container.style.display !== "none");
+    if (!current) return;
+
+    const currentButton = byId(current.buttonId);
+    if (isAllowedInMode(currentButton, normalized)) return;
+
+    window.button_click(fallback);
+  };
 
   api.showUserInformation = function () {
     const ctx = ensureInit();
@@ -142,7 +219,7 @@
       userInfo: byId("userInformationContainer"),
       smartbedControl: byId("smartbedControlContainer"),
     };
-    api._ctx = { containers };
+    api._ctx = { containers, nav: { connectButtonId, hasAllBeds, allbedsButtonId } };
 
     const icons = {
       bed: byId("bedIcon"),
@@ -150,6 +227,23 @@
       pressuremap: byId("pressuremapIcon"),
       setting: byId("settingIcon"),
     };
+    api._ctx.icons = icons;
+    const iconOrder = [
+      { el: icons.setting },
+      { el: icons.pressuremap },
+      { el: icons.airmattress },
+      { el: icons.bed },
+    ].filter((d) => d.el);
+    iconOrder.sort((a, b) => parseFloat(window.getComputedStyle(a.el).right) - parseFloat(window.getComputedStyle(b.el).right));
+    const iconSlots = iconOrder
+      .map((d) => window.getComputedStyle(d.el).right)
+      .filter(Boolean)
+      .filter((v, idx, arr) => arr.indexOf(v) === idx)
+      .sort((a, b) => parseFloat(a) - parseFloat(b));
+    api._ctx.iconOrder = iconOrder;
+    api._ctx.iconSlots = iconSlots;
+
+    api.applyWorkflowMode(api.getWorkflowMode());
 
     const tabIds = [
       connectButtonId,
@@ -192,6 +286,19 @@
     };
 
     window.button_click = function (clicked) {
+      const mode = api.getWorkflowMode();
+      const requested = byId(clicked);
+      if (!isAllowedInMode(requested, mode)) {
+        const candidates = ["airmattressButton", "pressuremapButton", "settingButton", "bedButton", connectButtonId];
+        for (const id of candidates) {
+          const el = byId(id);
+          if (isAllowedInMode(el, mode)) {
+            clicked = id;
+            break;
+          }
+        }
+      }
+
       setDisplay(containers.userInfo, "none");
       setDisplay(containers.smartbedControl, "none");
 
