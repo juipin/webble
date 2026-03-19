@@ -507,6 +507,11 @@ function connectToDevice(){
     console.log("Transmit service discovered:", service.uuid);
     return service.getCharacteristic(transmitCharacteristic);
   })
+  .then(characteristic => {
+    console.log("Transmit characteristic discovered:", characteristic.uuid);
+    transmitCharacteristicFound = characteristic;
+    writeOnCharacteristic("#RALLX");
+  })
   .catch(error => {
     console.log('Error: ', error);
   })
@@ -559,30 +564,28 @@ function handleCharacteristicChange(event){
 }
 
 function writeOnCharacteristic(value){
-  if (bleStateContainer.innerHTML == "Device disconnected")  {
-    if (bleTransmitServer && bleTransmitServer.connected) {
-      bleTransmitServiceFound.getCharacteristic(transmitCharacteristic)
-      .then(characteristic => {
-          console.log("Found the transmit characteristic: ", characteristic.uuid);
-          console.log("value =", value);
-          var data = new Uint8Array();
-          data = Uint8Array.from(value.split("").map(x => x.charCodeAt()));
-          console.log("data =", data);
-          characteristic.writeValueWithoutResponse(data);
-      })
-      .then(() => {
-          latestValueSent.innerHTML = value;
-          console.log("Value written to transmit characteristic:", value);
-          let d = new Date();
-          timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
-      })
-      .catch(error => {
-          console.error("Error writing to the transmit characteristic: ", error);
-      });
-    } else {
-      console.error ("Bluetooth is not connected. Cannot write to characteristic.")
-      window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!")
-    }
+  if (bleTransmitServer && bleTransmitServer.connected && bleTransmitServiceFound) {
+    bleTransmitServiceFound.getCharacteristic(transmitCharacteristic)
+    .then(characteristic => {
+        console.log("Found the transmit characteristic: ", characteristic.uuid);
+        console.log("value =", value);
+        var data = new Uint8Array();
+        data = Uint8Array.from(value.split("").map(x => x.charCodeAt()));
+        console.log("data =", data);
+        return characteristic.writeValueWithoutResponse(data);
+    })
+    .then(() => {
+        latestValueSent.innerHTML = value;
+        console.log("Value written to transmit characteristic:", value);
+        let d = new Date();
+        timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
+    })
+    .catch(error => {
+        console.error("Error writing to the transmit characteristic: ", error);
+    });
+  } else {
+    console.error ("Bluetooth is not connected. Cannot write to characteristic.")
+    window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!")
   }
 }
 
@@ -692,7 +695,10 @@ function processReceivedString(rx_data) {
       else if (rx_data.substring(0, 5) == "#SETX") {
         loadSETXData(rx_data.substring(5, rx_data.length));
       }
-      else if (rx_data.substring(0, 5) == "#ALL") {
+      else if (rx_data.substring(0, 5) == "#ALLX") {
+        loadALLXData(rx_data.substring(5, rx_data.length));
+      }
+      else if (rx_data.substring(0, 5) == "#ALL ") {
         loadALLData(rx_data.substring(5, rx_data.length));
       }
       else if (rx_data.substring(0, 5) == "#PRS") {
@@ -1079,6 +1085,104 @@ function loadSETXData(receivedString) {
   saveSettings();
 }
 
+function loadALLXData(receivedString) {
+  var dataLength = Math.floor(receivedString.length/3);
+  const buffer = new ArrayBuffer(dataLength);
+  var data = new Uint8Array(buffer);
+  for (let i = 0; i < dataLength; i++) {
+      data[i] = Number(receivedString.substring(i*3,(i+1)*3));
+  }
+  
+  if (dataLength < 59) return; // 28(ALL) + 11(SETS) + 20(SETX)
+
+  let offset = 0;
+  
+  // 1. ALL data (28 bytes)
+  iWeight = data[offset++];
+  iAge = data[offset++];
+  iHeight = data[offset++];
+  iEyeToHip = data[offset++];
+  indexSex = data[offset++];
+  valueSensory = data[offset++];
+  valueMoisture = data[offset++];
+  valueActivity = data[offset++];
+  valueMobility = data[offset++];
+  valueNutrition = data[offset++];
+  valueShear = data[offset++];
+  weight = data[offset++];
+  setStaticPressure = data[offset++] - 10;
+  setAutofirmPressure = data[offset++] + 10;
+  setDurationRedistribute = data[offset++];
+  setDurationAlternating = data[offset++];
+  setAutoTurnAngle = data[offset++];
+  operatingModeSelected = data[offset++];
+  minuteToNextRedistribute = data[offset++];
+  minuteToNextAlternating = data[offset++];
+  minuteToNextAutoturn = data[offset++];
+  minuteToNextMixedModeAction = data[offset++];
+  percentPressurePoints = data[offset++];
+  midBodyWidth = data[offset++];
+  midBodyHeight = data[offset++];
+  columnsEyeToHip = data[offset++];
+  columnsEyeToHeel = data[offset++];
+  degreeHipToThighs = data[offset++];
+
+  // 2. SETS data (11 bytes)
+  setStaticPressure = data[offset++] - 10; // Overrides ALL
+  setDurationRedistribute = data[offset++]; // Overrides ALL
+  setDurationAlternating = data[offset++]; // Overrides ALL
+  setAutoTurnAngle = data[offset++]; // Overrides ALL
+  bNotToTurn = data[offset++] == 1;
+  bNotToTurnRight = data[offset++] == 1;
+  bNotToTurnLeft = data[offset++] == 1;
+  bNotToMoveBack = data[offset++] == 1;
+  bNotToMoveLeg = data[offset++] == 1;
+  bCaregiverAlert = data[offset++] == 1;
+  bFaultAlert = data[offset++] == 1;
+
+  // 3. SETX data (20 bytes)
+  let setxHeader = data[offset++];
+  if (setxHeader == 1) {
+    bNoPillowMassage = data[offset++] == 1;
+    bNoCooling = data[offset++] == 1;
+    bRedistPlusAlter = data[offset++] == 1;
+
+    AUTOTURN_INTERVAL = data[offset++];
+    NUMBER_OF_TURNS = data[offset++];
+    SIDEBAG_FILL_INTERVAL = data[offset++];
+    LEG_AIRBAG_INTERVAL = data[offset++];
+    POSTURE_CHECK_INTERVAL = data[offset++];
+    HOLD_TIME_TO_COOL_VALVES = data[offset++];
+
+    PRESSURE_FIRM = data[offset++];
+    PRESSURE_SITTING = data[offset++];
+    PRESSURE_RELEASED = data[offset++];
+    PRESSURE_MAX = data[offset++];
+    PRESSURE_HYSTERESIS = data[offset++];
+
+    MIN_MATTRESS_TEMP_C = data[offset++];
+    MAX_MATTRESS_TEMP_C = data[offset++];
+    MAX_MATTRESS_RH = data[offset++];
+    DELTA_TEMPERATURE_C = data[offset++];
+    HEATSINK_MAX_TEMP_C = data[offset++];
+  } else {
+    offset += 19; // Skip rest of SETX if header not 1
+  }
+
+  // 4. Name data
+  if (offset < dataLength) {
+    let nameLen = data[offset++];
+    let nameStr = "";
+    for (let i = 0; i < nameLen && offset < dataLength; i++) {
+      nameStr += String.fromCharCode(data[offset++]);
+    }
+    document.getElementById('taName').value = nameStr;
+  }
+
+  updateUserInfoToDisplay();
+  saveSettings();
+}
+
 function loadALLData(receivedString) {
   var dataLength = Math.floor(receivedString.length/3);
   const buffer = new ArrayBuffer(dataLength);
@@ -1116,7 +1220,7 @@ function loadALLData(receivedString) {
   columnsEyeToHeel = data[26];
   degreeHipToThighs = data[27];
 
-  // Show ALL information on the User Info setting screen
+  updateUserInfoToDisplay();
   saveSettings();
 }
 
