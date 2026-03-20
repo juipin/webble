@@ -553,10 +553,25 @@ function handleCharacteristicChange(event){
     }
   }
 
-  const newValueReceived = new TextDecoder().decode(rawValue);
+  // We must process bytes directly because TextDecoder replaces invalid characters with \xfffd
+  let newValueReceived = "";
+  for (let i = 0; i < bytes.length; i++) {
+    newValueReceived += String.fromCharCode(bytes[i]);
+  }
+  
   if (newValueReceived.length > 0) {
     console.log("Characteristic value changed: ", newValueReceived);
-    retrievedValue.innerHTML = newValueReceived;
+    // Escape the string to make non-printable characters visible, like \x00
+    let escapedStr = "";
+    for (let i = 0; i < newValueReceived.length; i++) {
+        let charCode = newValueReceived.charCodeAt(i);
+        if (charCode < 32 || charCode > 126) {
+            escapedStr += "\\x" + charCode.toString(16).padStart(2, '0');
+        } else {
+            escapedStr += newValueReceived.charAt(i);
+        }
+    }
+    retrievedValue.innerHTML = escapedStr;
     let d = new Date();
     timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
     processReceivedString(newValueReceived);
@@ -1387,6 +1402,7 @@ function saveSettings() {
 function setDefaultValues() {
   bResetToDefaults = true;
   saveSettings();
+  executeSendAll(); // Send #ALLX command to sync defaults to ACM
 }
 
 function setUserInformation() {
@@ -1399,8 +1415,37 @@ function setSmartbedControl() {
 
 function setSaveUserInfoAndReturn() {
   if (typeof updateUserInfoFromDisplay === "function") updateUserInfoFromDisplay();
+  executeSendUserInfo();
   if (window.SmartbedUICommon) window.SmartbedUICommon.returnFromUserInformation();
 } 
+
+function executeSendUserInfo() {
+  // Send #NAME first
+  let nameStr = document.getElementById("taName").value;
+  if (!nameStr) nameStr = "Jane Doe";
+  let sName = "#NAME" + nameStr;
+  writeOnCharacteristic(sName);
+  
+  setTimeout(() => {
+    executeSendAll();
+  }, 100);
+}
+
+function executeSendAll() {
+  var s = "#ALL ";
+  s += get3DigitString(iWeight) + get3DigitString(iAge) + get3DigitString(iHeight) + get3DigitString(iEyeToHip) + get3DigitString(indexSex);
+  s += get3DigitString(valueSensory) + get3DigitString(valueMoisture) + get3DigitString(valueActivity) + get3DigitString(valueMobility);
+  s += get3DigitString(valueNutrition) + get3DigitString(valueShear) + get3DigitString(iBradenScore);
+  
+  // Next fields from 12 to 27
+  s += get3DigitString(setStaticPressure+10) + get3DigitString(0) + get3DigitString(setDurationRedistribute) + get3DigitString(setDurationAlternating);        
+  s += get3DigitString(setAutoTurnAngle) + get3DigitString(bNotToTurn?1:0) + get3DigitString(bNotToTurnRight?1:0) + get3DigitString(bNotToTurnLeft?1:0);       
+  s += get3DigitString(bNotToMoveBack?1:0) + get3DigitString(bNotToMoveLeg?1:0);
+  
+  s += get3DigitString(percentPressurePoints) + get3DigitString(midBodyWidth) + get3DigitString(midBodyHeight);
+  s += get3DigitString(columnsEyeToHip) + get3DigitString(columnsEyeToHeel) + get3DigitString(degreeHipToThighs);
+  writeOnCharacteristic(s);
+}
 
 function updateUserInfoFromDisplay() {
   iWeight = Number(document.getElementById("taBodyWeight").value);
@@ -1620,11 +1665,7 @@ function executeSendMeasureBody() {
 }
 
 function executeSendSettings() {
-  var s = "#SETS";
-  s += get3DigitString(setStaticPressure+10) + get3DigitString(setDurationRedistribute) + get3DigitString(setDurationAlternating);
-  s += get3DigitString(setAutoTurnAngle) + get3DigitString(bNotToTurn?1:0) + get3DigitString(bNotToTurnRight?1:0) + get3DigitString(bNotToTurnLeft?1:0);
-  s += get3DigitString(bNotToMoveBack?1:0) + get3DigitString(bNotToMoveLeg?1:0) + get3DigitString(bCaregiverAlert?1:0) + get3DigitString(bFaultAlert?1:0);
-  writeOnCharacteristic(s);
+  executeSendAll();
 }
 
 function executeSendSettingsExtended() {
