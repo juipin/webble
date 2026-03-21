@@ -312,9 +312,6 @@
         setSelected(icons.airmattress, false);
         setSelected(icons.pressuremap, false);
         setSelected(icons.setting, false);
-        // try {
-        //   send("#SCREEN0");
-        // } catch (_) {}
         return;
       }
 

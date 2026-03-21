@@ -528,9 +528,9 @@ function onDisconnected(event){
 function handleCharacteristicChange(event){
   const rawValue = event.target.value;
   const bytes = new Uint8Array(rawValue.buffer, rawValue.byteOffset, rawValue.byteLength);
-  if (bytes.length >= 9 && bytes[1] === 35) {
+  if (bytes.length >= 9 && bytes[0] === 35) {
     let msg = "";
-    for (let i = 1; i < 9; i++) {
+    for (let i = 0; i < 9; i++) {
       if (bytes[i] === 0) break;
       msg += String.fromCharCode(bytes[i]);
     }
@@ -553,28 +553,46 @@ function handleCharacteristicChange(event){
     }
   }
 
-  // We must process bytes directly because TextDecoder replaces invalid characters with \xfffd
-  let newValueReceived = "";
-  for (let i = 0; i < bytes.length; i++) {
-    newValueReceived += String.fromCharCode(bytes[i]);
+  if (!window.__bleRxBuffer) window.__bleRxBuffer = "";
+  let chunk = "";
+  for (let i = 0; i < bytes.length; i++) chunk += String.fromCharCode(bytes[i]);
+  if (chunk.indexOf("#") >= 0) {
+    window.__bleRxBuffer = chunk.substring(chunk.indexOf("#"));
+  } else {
+    window.__bleRxBuffer += chunk;
   }
-  
-  if (newValueReceived.length > 0) {
-    console.log("Characteristic value changed: ", newValueReceived);
-    // Escape the string to make non-printable characters visible, like \x00
-    let escapedStr = "";
-    for (let i = 0; i < newValueReceived.length; i++) {
-        let charCode = newValueReceived.charCodeAt(i);
-        if (charCode < 32 || charCode > 126) {
-            escapedStr += "\\x" + charCode.toString(16).padStart(2, '0');
-        } else {
-            escapedStr += newValueReceived.charAt(i);
+
+  if (window.__bleRxBuffer.startsWith("#ALLX")) {
+    const baseLen = 5 + 3 * 59;
+    if (window.__bleRxBuffer.length >= baseLen + 3) {
+      const nameLen = Number(window.__bleRxBuffer.substring(5 + 3 * 59, 5 + 3 * 60));
+      const totalLen = 5 + 3 * (60 + nameLen);
+      if (window.__bleRxBuffer.length >= totalLen) {
+        const payload = window.__bleRxBuffer.substring(5, totalLen);
+        const n = Math.floor((payload.length) / 3);
+        let out = "#ALLX ";
+        for (let i = 0; i < n; i++) {
+          out += Number(payload.substring(i * 3, (i + 1) * 3));
+          if (i < n - 1) out += " ";
         }
+        retrievedValue.innerHTML = out;
+        let d2 = new Date();
+        timestampContainer.innerHTML = d2.getHours() + ":" + d2.getMinutes();
+        processReceivedString(window.__bleRxBuffer.substring(0, totalLen));
+        window.__bleRxBuffer = window.__bleRxBuffer.substring(totalLen);
+        return;
+      }
     }
-    retrievedValue.innerHTML = escapedStr;
+  } else {
+    let esc = "";
+    for (let i = 0; i < chunk.length; i++) {
+      const c = chunk.charCodeAt(i);
+      if (c < 32 || c > 126) esc += "\\x" + c.toString(16).padStart(2, "0");
+      else esc += chunk[i];
+    }
+    retrievedValue.innerHTML = esc;
     let d = new Date();
     timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
-    processReceivedString(newValueReceived);
   }
 }
 
@@ -587,7 +605,7 @@ function writeOnCharacteristic(value){
         var data = new Uint8Array();
         data = Uint8Array.from(value.split("").map(x => x.charCodeAt()));
         console.log("data =", data);
-        return characteristic.writeValueWithoutResponse(data);
+        return characteristic.writeValue(data);
     })
     .then(() => {
         latestValueSent.innerHTML = value;
@@ -604,6 +622,20 @@ function writeOnCharacteristic(value){
   }
 }
 
+const cmdInputBle = document.getElementById("cmdInputBle");
+const cmdSendBle = document.getElementById("cmdSendBle");
+if (cmdSendBle && cmdInputBle) {
+  cmdSendBle.addEventListener("click", () => {
+    const v = String(cmdInputBle.value || "").trim();
+    if (v.length > 0) writeOnCharacteristic(v);
+  });
+  cmdInputBle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const v = String(cmdInputBle.value || "").trim();
+      if (v.length > 0) writeOnCharacteristic(v);
+    }
+  });
+}
 function disconnectDevice() {
   console.log("Disconnect Device.");
   if (bleServer && bleServer.connected) {
@@ -1402,7 +1434,7 @@ function saveSettings() {
 function setDefaultValues() {
   bResetToDefaults = true;
   saveSettings();
-  executeSendAll(); // Send #ALLX command to sync defaults to ACM
+  executeSendAllX(); // Send #ALLX command to sync defaults to ACM
 }
 
 function setUserInformation() {
@@ -1420,31 +1452,55 @@ function setSaveUserInfoAndReturn() {
 } 
 
 function executeSendUserInfo() {
-  // Send #NAME first
-  let nameStr = document.getElementById("taName").value;
-  if (!nameStr) nameStr = "Jane Doe";
-  let sName = "#NAME" + nameStr;
-  writeOnCharacteristic(sName);
-  
-  setTimeout(() => {
-    executeSendAll();
-  }, 100);
+  executeSendAllX();
 }
 
-function executeSendAll() {
-  var s = "#ALL ";
+function executeSendAllX() {
+  var s = "#ALLX";
+  
+  // 1. ALL data (28 bytes)
   s += get3DigitString(iWeight) + get3DigitString(iAge) + get3DigitString(iHeight) + get3DigitString(iEyeToHip) + get3DigitString(indexSex);
   s += get3DigitString(valueSensory) + get3DigitString(valueMoisture) + get3DigitString(valueActivity) + get3DigitString(valueMobility);
   s += get3DigitString(valueNutrition) + get3DigitString(valueShear) + get3DigitString(iBradenScore);
-  
-  // Next fields from 12 to 27
-  s += get3DigitString(setStaticPressure+10) + get3DigitString(0) + get3DigitString(setDurationRedistribute) + get3DigitString(setDurationAlternating);        
-  s += get3DigitString(setAutoTurnAngle) + get3DigitString(bNotToTurn?1:0) + get3DigitString(bNotToTurnRight?1:0) + get3DigitString(bNotToTurnLeft?1:0);       
-  s += get3DigitString(bNotToMoveBack?1:0) + get3DigitString(bNotToMoveLeg?1:0);
-  
+  s += get3DigitString(setStaticPressure+10) + get3DigitString(setAutofirmPressure+10) + get3DigitString(setDurationRedistribute) + get3DigitString(setDurationAlternating);        
+  s += get3DigitString(setAutoTurnAngle) + get3DigitString(operatingModeSelected) + get3DigitString(minuteToNextRedistribute) + get3DigitString(minuteToNextAlternating);       
+  s += get3DigitString(minuteToNextAutoturn) + get3DigitString(minuteToNextMixedModeAction);
   s += get3DigitString(percentPressurePoints) + get3DigitString(midBodyWidth) + get3DigitString(midBodyHeight);
   s += get3DigitString(columnsEyeToHip) + get3DigitString(columnsEyeToHeel) + get3DigitString(degreeHipToThighs);
+
+  // 2. SETS data (11 bytes)
+  s += get3DigitString(setStaticPressure+10);
+  s += get3DigitString(setDurationRedistribute);
+  s += get3DigitString(setDurationAlternating);
+  s += get3DigitString(setAutoTurnAngle);
+  s += get3DigitString(bNotToTurn?1:0) + get3DigitString(bNotToTurnRight?1:0) + get3DigitString(bNotToTurnLeft?1:0);
+  s += get3DigitString(bNotToMoveBack?1:0) + get3DigitString(bNotToMoveLeg?1:0);
+  s += get3DigitString(bCaregiverAlert?1:0) + get3DigitString(bFaultAlert?1:0);
+
+  // 3. SETX data (20 bytes)
+  s += get3DigitString(1); // setxHeader
+  s += get3DigitString(bNoPillowMassage?1:0) + get3DigitString(bNoCooling?1:0) + get3DigitString(bRedistPlusAlter?1:0);
+  s += get3DigitString(AUTOTURN_INTERVAL) + get3DigitString(NUMBER_OF_TURNS);
+  s += get3DigitString(SIDEBAG_FILL_INTERVAL) + get3DigitString(LEG_AIRBAG_INTERVAL) + get3DigitString(POSTURE_CHECK_INTERVAL) + get3DigitString(HOLD_TIME_TO_COOL_VALVES);
+  s += get3DigitString(PRESSURE_FIRM) + get3DigitString(PRESSURE_SITTING) + get3DigitString(PRESSURE_RELEASED);
+  s += get3DigitString(PRESSURE_MAX) + get3DigitString(PRESSURE_HYSTERESIS);
+  s += get3DigitString(MIN_MATTRESS_TEMP_C) + get3DigitString(MAX_MATTRESS_TEMP_C) + get3DigitString(MAX_MATTRESS_RH);
+  s += get3DigitString(DELTA_TEMPERATURE_C) + get3DigitString(HEATSINK_MAX_TEMP_C);
+
+  // 4. Name data
+  let nameStr = document.getElementById("taName").value;
+  if (!nameStr) nameStr = "Jane Doe";
+  let maxNameLen = Math.min(nameStr.length, 20); // keep reasonable limit
+  s += get3DigitString(maxNameLen);
+  for (let i = 0; i < maxNameLen; i++) {
+    s += get3DigitString(nameStr.charCodeAt(i));
+  }
+
   writeOnCharacteristic(s);
+}
+
+function executeSendAll() {
+  executeSendAllX();
 }
 
 function updateUserInfoFromDisplay() {
@@ -1655,8 +1711,7 @@ function executeSendPressureReleaseSettingToAIRBED() {
 
 function executeSettingChangedActions() {
   saveSettings();
-  executeSendSettings();
-  executeSendSettingsExtended();
+  executeSendAllX();
 }
 
 function executeSendMeasureBody() {
