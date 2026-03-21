@@ -584,15 +584,17 @@ function handleCharacteristicChange(event){
       }
     }
   } else {
-    let esc = "";
-    for (let i = 0; i < chunk.length; i++) {
-      const c = chunk.charCodeAt(i);
-      if (c < 32 || c > 126) esc += "\\x" + c.toString(16).padStart(2, "0");
-      else esc += chunk[i];
+    if (chunk.indexOf("#") >= 0) {
+      let esc = "";
+      for (let i = 0; i < chunk.length; i++) {
+        const c = chunk.charCodeAt(i);
+        if (c < 32 || c > 126) esc += "\\x" + c.toString(16).padStart(2, "0");
+        else esc += chunk[i];
+      }
+      retrievedValue.innerHTML = esc;
+      let d = new Date();
+      timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
     }
-    retrievedValue.innerHTML = esc;
-    let d = new Date();
-    timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
   }
 }
 
@@ -1225,6 +1227,43 @@ function loadALLXData(receivedString) {
     }
     document.getElementById('taName').value = nameStr;
   }
+
+  // Apply to UI controls that reflect mode and settings
+  if (typeof modeSelect !== "undefined" && modeSelect) {
+    if (operatingModeSelected >= 0 && operatingModeSelected < modeSelect.options.length) {
+      modeSelect.selectedIndex = operatingModeSelected;
+      executionMode = modeSelect.value;
+      executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
+      if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minuteToNextMixedModeAction + " minutes";
+      else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minuteToNextMixedModeAction + " minutes";
+      else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
+      else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minuteToNextMixedModeAction + " minutes";
+      else pressureReleaseActionMsg.innerHTML = "";
+    }
+  }
+  if (lblStaticPressure && rangeStaticPressure) {
+    rangeStaticPressure.value = setStaticPressure;
+    lblStaticPressure.innerHTML = setStaticPressure;
+  }
+  if (rangeDurationRedistribute && lblDurationRedistribute) {
+    rangeDurationRedistribute.value = setDurationRedistribute;
+    lblDurationRedistribute.innerHTML = setDurationRedistribute;
+  }
+  if (rangeDurationAlternating && lblDurationAlternating) {
+    rangeDurationAlternating.value = setDurationAlternating;
+    lblDurationAlternating.innerHTML = setDurationAlternating;
+  }
+  if (rangeAutoTurnAngle && lblAutoTurnAngle) {
+    rangeAutoTurnAngle.value = setAutoTurnAngle;
+    lblAutoTurnAngle.innerHTML = setAutoTurnAngle;
+  }
+  if (typeof chkNoTurn !== "undefined" && chkNoTurn) chkNoTurn.checked = bNotToTurn;
+  if (typeof chkNoTurnRight !== "undefined" && chkNoTurnRight) chkNoTurnRight.checked = bNotToTurnRight;
+  if (typeof chkNoTurnLeft !== "undefined" && chkNoTurnLeft) chkNoTurnLeft.checked = bNotToTurnLeft;
+  if (typeof chkNoMoveBack !== "undefined" && chkNoMoveBack) chkNoMoveBack.checked = bNotToMoveBack;
+  if (typeof chkNoMoveLeg !== "undefined" && chkNoMoveLeg) chkNoMoveLeg.checked = bNotToMoveLeg;
+  if (typeof chkCaregiverAlert !== "undefined" && chkCaregiverAlert) chkCaregiverAlert.checked = bCaregiverAlert;
+  if (typeof chkFaultAlert !== "undefined" && chkFaultAlert) chkFaultAlert.checked = bFaultAlert;
 
   updateUserInfoToDisplay();
   saveSettings();
