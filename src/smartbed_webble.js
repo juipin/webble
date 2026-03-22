@@ -563,10 +563,10 @@ function handleCharacteristicChange(event){
   }
 
   if (window.__bleRxBuffer.startsWith("#ALLX")) {
-    const baseLen = 5 + 3 * 59;
+    const baseLen = 5 + 3 * 50; // 28 ALL + 22 SETX
     if (window.__bleRxBuffer.length >= baseLen + 3) {
-      const nameLen = Number(window.__bleRxBuffer.substring(5 + 3 * 59, 5 + 3 * 60));
-      const totalLen = 5 + 3 * (60 + nameLen);
+      const nameLen = Number(window.__bleRxBuffer.substring(5 + 3 * 50, 5 + 3 * 51));
+      const totalLen = 5 + 3 * (51 + nameLen);
       if (window.__bleRxBuffer.length >= totalLen) {
         const payload = window.__bleRxBuffer.substring(5, totalLen);
         const n = Math.floor((payload.length) / 3);
@@ -1142,7 +1142,7 @@ function loadALLXData(receivedString) {
       data[i] = Number(receivedString.substring(i*3,(i+1)*3));
   }
   
-  if (dataLength < 59) return; // 28(ALL) + 11(SETS) + 20(SETX)
+  if (dataLength < 50) return; // 28(ALL) + 22(SETX)
 
   let offset = 0;
   
@@ -1159,8 +1159,8 @@ function loadALLXData(receivedString) {
   valueNutrition = data[offset++];
   valueShear = data[offset++];
   weight = data[offset++];
-  setStaticPressure = data[offset++] - 10;
-  setAutofirmPressure = data[offset++] + 10;
+  setStaticPressure = data[offset++];
+  setAutofirmPressure = data[offset++];
   setDurationRedistribute = data[offset++];
   setDurationAlternating = data[offset++];
   setAutoTurnAngle = data[offset++];
@@ -1176,20 +1176,7 @@ function loadALLXData(receivedString) {
   columnsEyeToHeel = data[offset++];
   degreeHipToThighs = data[offset++];
 
-  // 2. SETS data (11 bytes)
-  setStaticPressure = data[offset++] - 10; // Overrides ALL
-  setDurationRedistribute = data[offset++]; // Overrides ALL
-  setDurationAlternating = data[offset++]; // Overrides ALL
-  setAutoTurnAngle = data[offset++]; // Overrides ALL
-  bNotToTurn = data[offset++] == 1;
-  bNotToTurnRight = data[offset++] == 1;
-  bNotToTurnLeft = data[offset++] == 1;
-  bNotToMoveBack = data[offset++] == 1;
-  bNotToMoveLeg = data[offset++] == 1;
-  bCaregiverAlert = data[offset++] == 1;
-  bFaultAlert = data[offset++] == 1;
-
-  // 3. SETX data (20 bytes)
+  // 2. SETX data (22 bytes)
   let setxHeader = data[offset++];
   if (setxHeader == 1) {
     bNoPillowMassage = data[offset++] == 1;
@@ -1214,8 +1201,10 @@ function loadALLXData(receivedString) {
     MAX_MATTRESS_RH = data[offset++];
     DELTA_TEMPERATURE_C = data[offset++];
     HEATSINK_MAX_TEMP_C = data[offset++];
+    bCaregiverAlert = data[offset++] == 1;
+    bFaultAlert = data[offset++] == 1;
   } else {
-    offset += 19; // Skip rest of SETX if header not 1
+    offset += 21; // Skip rest of SETX if header not 1
   }
 
   // 4. Name data
@@ -1289,8 +1278,8 @@ function loadALLData(receivedString) {
   valueNutrition = data[9];
   valueShear = data[10];
   weight = data[11];
-  setStaticPressure = data[12] - 10;
-  setAutofirmPressure = data[13] + 10;
+  setStaticPressure = data[12];
+  setAutofirmPressure = data[13];
   setDurationRedistribute = data[14];
   setDurationAlternating = data[15];
   setAutoTurnAngle = data[16];
@@ -1501,22 +1490,13 @@ function executeSendAllX() {
   s += get3DigitString(iWeight) + get3DigitString(iAge) + get3DigitString(iHeight) + get3DigitString(iEyeToHip) + get3DigitString(indexSex);
   s += get3DigitString(valueSensory) + get3DigitString(valueMoisture) + get3DigitString(valueActivity) + get3DigitString(valueMobility);
   s += get3DigitString(valueNutrition) + get3DigitString(valueShear) + get3DigitString(iBradenScore);
-  s += get3DigitString(setStaticPressure+10) + get3DigitString(setAutofirmPressure+10) + get3DigitString(setDurationRedistribute) + get3DigitString(setDurationAlternating);        
+  s += get3DigitString(setStaticPressure) + get3DigitString(setAutofirmPressure) + get3DigitString(setDurationRedistribute) + get3DigitString(setDurationAlternating);        
   s += get3DigitString(setAutoTurnAngle) + get3DigitString(operatingModeSelected) + get3DigitString(minuteToNextRedistribute) + get3DigitString(minuteToNextAlternating);       
   s += get3DigitString(minuteToNextAutoturn) + get3DigitString(minuteToNextMixedModeAction);
   s += get3DigitString(percentPressurePoints) + get3DigitString(midBodyWidth) + get3DigitString(midBodyHeight);
   s += get3DigitString(columnsEyeToHip) + get3DigitString(columnsEyeToHeel) + get3DigitString(degreeHipToThighs);
 
-  // 2. SETS data (11 bytes)
-  s += get3DigitString(setStaticPressure+10);
-  s += get3DigitString(setDurationRedistribute);
-  s += get3DigitString(setDurationAlternating);
-  s += get3DigitString(setAutoTurnAngle);
-  s += get3DigitString(bNotToTurn?1:0) + get3DigitString(bNotToTurnRight?1:0) + get3DigitString(bNotToTurnLeft?1:0);
-  s += get3DigitString(bNotToMoveBack?1:0) + get3DigitString(bNotToMoveLeg?1:0);
-  s += get3DigitString(bCaregiverAlert?1:0) + get3DigitString(bFaultAlert?1:0);
-
-  // 3. SETX data (20 bytes)
+  // 2. SETX data (22 bytes; last 2 are caregiver/fault alerts)
   s += get3DigitString(1); // setxHeader
   s += get3DigitString(bNoPillowMassage?1:0) + get3DigitString(bNoCooling?1:0) + get3DigitString(bRedistPlusAlter?1:0);
   s += get3DigitString(AUTOTURN_INTERVAL) + get3DigitString(NUMBER_OF_TURNS);
@@ -1525,6 +1505,7 @@ function executeSendAllX() {
   s += get3DigitString(PRESSURE_MAX) + get3DigitString(PRESSURE_HYSTERESIS);
   s += get3DigitString(MIN_MATTRESS_TEMP_C) + get3DigitString(MAX_MATTRESS_TEMP_C) + get3DigitString(MAX_MATTRESS_RH);
   s += get3DigitString(DELTA_TEMPERATURE_C) + get3DigitString(HEATSINK_MAX_TEMP_C);
+  s += get3DigitString(bCaregiverAlert?1:0) + get3DigitString(bFaultAlert?1:0);
 
   // 4. Name data
   let nameStr = document.getElementById("taName").value;
