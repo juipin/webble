@@ -1871,6 +1871,11 @@ function updateUserInfoToDisplay() {
   if (lblBradenScoreUser) lblBradenScoreUser.textContent = String(iBradenScore);
   const lblBradenScorePRS = document.getElementById("lblBradenScorePRS");
   if (lblBradenScorePRS) lblBradenScorePRS.textContent = String(iBradenScore);
+  // Update PRS panel Shear and Mobility if present
+  const lblShear = document.getElementById("lblShear");
+  if (lblShear) lblShear.textContent = String(valueShear);
+  const lblMobility = document.getElementById("lblMobility");
+  if (lblMobility) lblMobility.textContent = String(valueMobility);
 
   setTextIfExists("taBodyPercent", percentPressurePoints);
   setTextIfExists("taBodyWidth", midBodyWidth);
