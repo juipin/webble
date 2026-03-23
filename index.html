@@ -593,10 +593,34 @@
               banner.style.display = "none";
             };
 
+            const showLoadedToast = () => {
+              if (!banner || !bannerText) return;
+              bannerText.textContent = "Update loaded.";
+              banner.style.display = "block";
+              if (btnReload) {
+                btnReload.style.display = "none";
+              }
+              if (btnDismiss) {
+                btnDismiss.textContent = "Close";
+                btnDismiss.disabled = false;
+                btnDismiss.style.opacity = "1";
+                btnDismiss.style.cursor = "pointer";
+              }
+              setTimeout(() => {
+                hideBanner();
+              }, 2000);
+            };
+
+            if (sessionStorage.getItem("appReloading") === "1") {
+              sessionStorage.removeItem("appReloading");
+              showLoadedToast();
+            }
+
             if (btnDismiss) btnDismiss.addEventListener("click", hideBanner);
             if (btnReload) {
               btnReload.addEventListener("click", () => {
                 pendingReload = true;
+                sessionStorage.setItem("appReloading", "1");
                 if (bannerText) bannerText.textContent = "Updating…";
                 if (btnReload) {
                   btnReload.disabled = true;

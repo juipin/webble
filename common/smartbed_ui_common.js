@@ -338,6 +338,10 @@
         setSelected(icons.pressuremap, false);
         setSelected(icons.setting, false);
         try {
+          const msg = document.getElementById("pressureReleaseActionMsg");
+          if (msg) msg.style.visibility = "visible";
+        } catch (_) {}
+        try {
           send("#SCREEN2");
         } catch (_) {}
         return;
@@ -352,6 +356,10 @@
         setSelected(icons.airmattress, true);
         setSelected(icons.pressuremap, false);
         setSelected(icons.setting, false);
+        try {
+          const msg = document.getElementById("pressureReleaseActionMsg");
+          if (msg) msg.style.visibility = "visible";
+        } catch (_) {}
         startPvsTimer();
         try {
           send("#SCREEN1");
@@ -369,6 +377,10 @@
         setSelected(icons.airmattress, false);
         setSelected(icons.pressuremap, true);
         setSelected(icons.setting, false);
+        try {
+          const msg = document.getElementById("pressureReleaseActionMsg");
+          if (msg) msg.style.visibility = "visible";
+        } catch (_) {}
 
         const ctx = window.ctx;
         if (ctx && typeof ctx.fillRect === "function") {
@@ -393,6 +405,10 @@
         setSelected(icons.airmattress, false);
         setSelected(icons.pressuremap, false);
         setSelected(icons.setting, true);
+        try {
+          const msg = document.getElementById("pressureReleaseActionMsg");
+          if (msg) msg.style.visibility = "hidden";
+        } catch (_) {}
         try {
           send("#SCREEN5");
         } catch (_) {}

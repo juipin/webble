@@ -21,6 +21,7 @@ let psm_data;
 let executionMode = 0; // mode_mixed or Smart Mode
 let executionModeText = "Smart Mode";
 let timerPVS;
+let transmitCharacteristicFound;
 
 // Using ArrayBuffer with TypedArray instead of normal array as it uses contiguous memory space, allow direct memory manipulation, faster calculation, and conserve space
 const buffer1 = new ArrayBuffer(960);
@@ -74,18 +75,18 @@ let DELTA_TEMPERATURE_C = 2;
 let HEATSINK_MAX_TEMP_C = 65;
 
 let weight = 60;
-let setStaticPressure = 22;
-let setAutofirmPressure = 32;
+let setStaticPressure = 32;
+let setAutofirmPressure = PRESSURE_FIRM;
 let setDurationAlternating = 5;
 let setDurationRedistribute = 30;
-let setDurationAutoturn= 20;
+let setDurationAutoturn= AUTOTURN_INTERVAL;
 let setDurationMixed = 30;
 let setAutoTurnAngle = 15;
-let operatingModeSelected = 1;
-let minuteToNextRedistribute = 30;
+let operatingModeSelected = 0;
+let minuteToNextRedistribute = setDurationRedistribute;
 let minuteToNextAlternating = setDurationAlternating;
-let minuteToNextAutoturn = 20;
-let minuteToNextMixedModeAction = 30;
+let minuteToNextAutoturn = setDurationAutoturn;
+let minuteToNextMixedModeAction = setDurationMixed;
 let percentPressurePoints = 40;
 let midBodyWidth = 7;
 let midBodyHeight = 12;
@@ -482,6 +483,7 @@ function connectToDevice(){
     characteristic.addEventListener('characteristicvaluechanged', handleCharacteristicChange);
     characteristic.startNotifications();
     console.log("Notifications Started.");
+    window.__bleNotifStarted = Date.now();
     //return characteristic.readValue(); // on mobile, returns DOMException: GATT operation failed for unknown reason. Delete it for now since it only fetches the previously received data
   })
   .then(value => {
@@ -510,7 +512,21 @@ function connectToDevice(){
   .then(characteristic => {
     console.log("Transmit characteristic discovered:", characteristic.uuid);
     transmitCharacteristicFound = characteristic;
-    writeOnCharacteristic("#RALLX");
+    const scheduleMs = 7500;
+    setTimeout(() => {
+      if (bleTransmitServer && bleTransmitServer.connected && !window.__seenAllx) {
+        writeOnCharacteristic("#RALLX")
+          .then(() => new Promise(res => setTimeout(res, 600)))
+          .then(() => writeOnCharacteristic("#RALL"))
+          .then(() => new Promise(res => setTimeout(res, 600)))
+          .then(() => writeOnCharacteristic("#RSETX"))
+          .then(() => new Promise(res => setTimeout(res, 600)))
+          .then(() => writeOnCharacteristic("#RSETS"))
+          .catch(err => console.log("Error in initial request chain:", err));
+      } else {
+        console.log("Initial request chain skipped: #ALLX already received");
+      }
+    }, scheduleMs);
   })
   .catch(error => {
     console.log('Error: ', error);
@@ -526,101 +542,166 @@ function onDisconnected(event){
 }
 
 function handleCharacteristicChange(event){
+  console.log("handleCharacteristicChange");
   const rawValue = event.target.value;
   const bytes = new Uint8Array(rawValue.buffer, rawValue.byteOffset, rawValue.byteLength);
-  if (bytes.length >= 9 && bytes[0] === 35) {
-    let msg = "";
-    for (let i = 0; i < 9; i++) {
-      if (bytes[i] === 0) break;
-      msg += String.fromCharCode(bytes[i]);
+ 
+  // Byte-buffer accumulator (robust to binary payloads and MTU fragmentation)
+  if (!window.__rxBytes) window.__rxBytes = new Uint8Array(0);
+  if (bytes.length > 0) {
+    console.log("bytes: ", bytes);
+    console.log("bytes.length: ", bytes.length);
+    const merged = new Uint8Array(window.__rxBytes.length + bytes.length);
+    merged.set(window.__rxBytes);
+    merged.set(bytes, window.__rxBytes.length);
+    window.__rxBytes = merged;
+    if (window.__rxBytes.length > 8192) {
+      window.__rxBytes = window.__rxBytes.slice(-4096);
     }
-
-    if (msg === "#PSMAP" || msg === "#PZMAP") {
-      const colStart = bytes[9];
+  }
+ 
+  // Helper to decode ASCII from byte buffer
+  const decodeAscii = (buf, start, len) => {
+    let s = "";
+    const end = Math.min(buf.length, start + len);
+    for (let i = start; i < end; i++) s += String.fromCharCode(buf[i]);
+    return s;
+  };
+ 
+  // Drop leading garbage until '#'
+  const firstHashIdx = window.__rxBytes.indexOf(35); // '#'
+  if (firstHashIdx > 0) {
+    window.__rxBytes = window.__rxBytes.slice(firstHashIdx);
+  }
+ 
+  // 1) Pressure map packets (#PSMAP## / #PZMAP##) - binary payload follows 8-byte header
+  while (window.__rxBytes.length >= 9) {
+    const header8 = decodeAscii(window.__rxBytes, 0, 8);
+    if (header8 === "#PSMAP##" || header8 === "#PZMAP##") {
+      const need = 9 + pixelsPerPackage;
+      if (window.__rxBytes.length < need) break;
+      const colStart = window.__rxBytes[8];
       const packageNumber = Math.floor(colStart / 6);
       pixelCount = packageNumber * pixelsPerPackage;
       for (let i = 0; i < pixelsPerPackage; i++) {
         if ((pixelCount + i) >= totalPixelCount) break;
-        imageGreyPixelArray[pixelCount + i] = bytes[10 + i];
+        imageGreyPixelArray[pixelCount + i] = window.__rxBytes[9 + i];
       }
-
       container = document.getElementById("pressuremapContainer");
       if (pixelCount >= 840 && container.style.display == "block") {
-        if (msg === "#PSMAP") drawPSColorMap();
+        if (header8 === "#PSMAP##") drawPSColorMap();
         else drawPZColorMap();
       }
-      return;
+      window.__rxBytes = window.__rxBytes.slice(need);
+      continue;
     }
+    break;
   }
-
-  if (!window.__bleRxBuffer) window.__bleRxBuffer = "";
+ 
+  // Note: #ALLX and other commands over BLE are ASCII-encoded triplets from ACM; handled by ASCII router below.
+ 
+  // 3) AIRM acknowledgement: "#AIRM###" + mode[3] + minute[3] (ASCII digits)
+  while (window.__rxBytes.length >= 14 && decodeAscii(window.__rxBytes, 0, 8) === "#AIRM###") {
+    const modeStr = decodeAscii(window.__rxBytes, 8, 3);
+    const minuteStr = decodeAscii(window.__rxBytes, 11, 3);
+    const modeIdx = parseInt(modeStr || "0", 10);
+    const minute = parseInt(minuteStr || "0", 10);
+    retrievedValue.innerHTML = "#AIRM " + modeIdx + " " + minute;
+    let d2 = new Date();
+    timestampContainer.innerHTML = d2.getHours() + ":" + d2.getMinutes();
+    if (modeSelect && modeIdx >= 0 && modeIdx < modeSelect.options.length) {
+      modeSelect.selectedIndex = modeIdx;
+      executionMode = modeIdx;
+      executionModeText = modeSelect.options[modeIdx].text;
+      if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minute + " minutes";
+      else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minute + " minutes";
+      else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minute + " minutes";
+      else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minute + " minutes";
+      else pressureReleaseActionMsg.innerHTML = "";
+      pressureReleaseActionMsg.style.visibility = 'visible';
+    }
+    window.__rxBytes = window.__rxBytes.slice(14);
+  }
+ 
+  // 4) ASCII accumulator for other commands (chunked notifications)
+  if (typeof window.__bleRxBuffer !== "string") window.__bleRxBuffer = "";
   let chunk = "";
   for (let i = 0; i < bytes.length; i++) chunk += String.fromCharCode(bytes[i]);
-  if (chunk.indexOf("#") >= 0) {
-    window.__bleRxBuffer = chunk.substring(chunk.indexOf("#"));
-  } else {
-    window.__bleRxBuffer += chunk;
+  window.__bleRxBuffer += chunk;
+  const firstHash = window.__bleRxBuffer.indexOf("#");
+  if (firstHash > 0) window.__bleRxBuffer = window.__bleRxBuffer.substring(firstHash);
+  if (window.__bleRxBuffer.length > 2048) {
+    window.__bleRxBuffer = window.__bleRxBuffer.slice(-1024);
   }
-
-  if (window.__bleRxBuffer.startsWith("#ALLX")) {
-    const baseLen = 5 + 3 * 50; // 28 ALL + 22 SETX
-    if (window.__bleRxBuffer.length >= baseLen + 3) {
-      const nameLen = Number(window.__bleRxBuffer.substring(5 + 3 * 50, 5 + 3 * 51));
-      const totalLen = 5 + 3 * (51 + nameLen);
-      if (window.__bleRxBuffer.length >= totalLen) {
-        const payload = window.__bleRxBuffer.substring(5, totalLen);
-        const n = Math.floor((payload.length) / 3);
-        let out = "#ALLX ";
-        for (let i = 0; i < n; i++) {
-          out += Number(payload.substring(i * 3, (i + 1) * 3));
-          if (i < n - 1) out += " ";
-        }
-        retrievedValue.innerHTML = out;
-        let d2 = new Date();
-        timestampContainer.innerHTML = d2.getHours() + ":" + d2.getMinutes();
-        processReceivedString(window.__bleRxBuffer.substring(0, totalLen));
-        window.__bleRxBuffer = window.__bleRxBuffer.substring(totalLen);
-        return;
-      }
+  // Process known ASCII-encoded frames via router
+  if (window.__bleRxBuffer.startsWith("#")) {
+    // Split by header boundaries and process complete frames
+    while (true) {
+      const nextHash = window.__bleRxBuffer.indexOf("#", 1);
+      if (nextHash === -1) break;
+      const frame = window.__bleRxBuffer.substring(0, nextHash);
+      retrievedValue.innerHTML = frame;
+      const d3 = new Date();
+      timestampContainer.innerHTML = d3.getHours() + ":" + d3.getMinutes();
+      processReceivedString(frame);
+      window.__bleRxBuffer = window.__bleRxBuffer.substring(nextHash);
     }
+    // If we have a single frame without a trailing '#', defer processing until no new chunks arrive briefly
+    if (window.__asciiFlushTimer) clearTimeout(window.__asciiFlushTimer);
+    window.__asciiFlushTimer = setTimeout(() => {
+      if (window.__bleRxBuffer && window.__bleRxBuffer.startsWith("#")) {
+        retrievedValue.innerHTML = window.__bleRxBuffer;
+        const d4 = new Date();
+        timestampContainer.innerHTML = d4.getHours() + ":" + d4.getMinutes();
+        console.log("window.__bleRxBuffer: ", window.__bleRxBuffer);
+        processReceivedString(window.__bleRxBuffer);
+        window.__bleRxBuffer = "";
+      }
+    }, 180);
   } else {
-    if (chunk.indexOf("#") >= 0) {
-      let esc = "";
-      for (let i = 0; i < chunk.length; i++) {
-        const c = chunk.charCodeAt(i);
-        if (c < 32 || c > 126) esc += "\\x" + c.toString(16).padStart(2, "0");
-        else esc += chunk[i];
-      }
-      retrievedValue.innerHTML = esc;
-      let d = new Date();
-      timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
-    }
+    // Do not overwrite UI with escaped bytes; wait for a header
   }
 }
 
 function writeOnCharacteristic(value){
   if (bleTransmitServer && bleTransmitServer.connected && bleTransmitServiceFound) {
-    bleTransmitServiceFound.getCharacteristic(transmitCharacteristic)
-    .then(characteristic => {
+    return bleTransmitServiceFound.getCharacteristic(transmitCharacteristic)
+      .then(characteristic => {
         console.log("Found the transmit characteristic: ", characteristic.uuid);
         console.log("value =", value);
-        var data = new Uint8Array();
-        data = Uint8Array.from(value.split("").map(x => x.charCodeAt()));
+        const data = Uint8Array.from(value.split("").map(x => x.charCodeAt(0)));
         console.log("data =", data);
         return characteristic.writeValue(data);
-    })
-    .then(() => {
+      })
+      .then(() => {
         latestValueSent.innerHTML = value;
         console.log("Value written to transmit characteristic:", value);
         let d = new Date();
         timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
-    })
-    .catch(error => {
+        if (typeof value === "string" && value.startsWith("#AIRM00")) {
+          const idx = parseInt(value.substring(7, 8), 10);
+          if (!isNaN(idx) && modeSelect && idx >= 0 && idx < modeSelect.options.length) {
+            modeSelect.selectedIndex = idx;
+            executionMode = idx;
+            executionModeText = modeSelect.options[idx].text;
+            const minute = minuteToNextMixedModeAction;
+            if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minute + " minutes";
+            else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minute + " minutes";
+            else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minute + " minutes";
+            else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minute + " minutes";
+            else pressureReleaseActionMsg.innerHTML = "";
+            pressureReleaseActionMsg.style.visibility = 'visible';
+          }
+        }
+      })
+      .catch(error => {
         console.error("Error writing to the transmit characteristic: ", error);
-    });
+        throw error;
+      });
   } else {
     console.error ("Bluetooth is not connected. Cannot write to characteristic.")
     window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!")
+    return Promise.reject(new Error("BLE not connected"));
   }
 }
 
@@ -667,7 +748,7 @@ function disconnectDevice() {
 }
 
 function runModeSelect() {
-  executionMode = modeSelect.value;
+  executionMode = modeSelect.selectedIndex;
   executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
   var s = "#AIRM00" + executionMode;
   writeOnCharacteristic(s);
@@ -1081,20 +1162,39 @@ function loadSETSData(receivedString) {
       data[i] = Number(receivedString.substring(i*3,(i+1)*3));
   }
 
-  setStaticPressure = data[0] - 10;
-  setDurationRedistribute = data[1];
-  setDurationAlternating = data[2];
-  setAutoTurnAngle = data[3];
-  if (data[4] == 1) bNotToTurn = true; else bNotToTurn = false;
-  if (data[5] == 1) bNotToTurnRight = true; else bNotToTurnRight = false;
-  if (data[6] == 1) bNotToTurnLeft = true; else bNotToTurnLeft = false;
-  if (data[7] == 1) bNotToMoveBack = true; else bNotToMoveBack = false;
-  if (data[8] == 1) bNotToMoveLeg = true; else bNotToMoveLeg = false;
-  if (data[9] == 1) bCaregiverAlert = true; else bCaregiverAlert = false;
-  if (data[10] == 1) bFaultAlert = true; else bFaultAlert = false;
+  // Mapping (SETS 11 bytes):
+  // [0]=mode, [1]=staticPressure, [2]=durationRedistribute, [3]=durationAlternating, [4]=autoTurnAngle,
+  // [5]=noTurn, [6]=noTurnRight, [7]=noTurnLeft, [8]=noMoveBack, [9]=noMoveLeg, [10]=reserved
+  setStaticPressure = data[1];
+  setDurationRedistribute = data[2];
+  setDurationAlternating = data[3];
+  setAutoTurnAngle = data[4];
+  bNotToTurn = (data[5] == 1);
+  bNotToTurnRight = (data[6] == 1);
+  bNotToTurnLeft = (data[7] == 1);
+  bNotToMoveBack = (data[8] == 1);
+  bNotToMoveLeg = (data[9] == 1);
 
   // Show ALL information on the User Info setting screen
   saveSettings();
+  // Update Settings page controls
+  if (lblStaticPressure && rangeStaticPressure) {
+    rangeStaticPressure.value = setStaticPressure;
+    lblStaticPressure.innerHTML = setStaticPressure;
+  }
+  if (rangeDurationRedistribute && lblDurationRedistribute) {
+    rangeDurationRedistribute.value = setDurationRedistribute;
+    lblDurationRedistribute.innerHTML = setDurationRedistribute;
+  }
+  if (rangeDurationAlternating && lblDurationAlternating) {
+    rangeDurationAlternating.value = setDurationAlternating;
+    lblDurationAlternating.innerHTML = setDurationAlternating;
+  }
+  const setCheck = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  setCheck("notToTurn", bNotToTurn);
+  setCheck("notToMoveLeg", bNotToMoveLeg);
+  setCheck("caregiverAlert", bCaregiverAlert);
+  setCheck("faultAlert", bFaultAlert);
 }
 
 function loadSETXData(receivedString) {
@@ -1135,87 +1235,99 @@ function loadSETXData(receivedString) {
 }
 
 function loadALLXData(receivedString) {
-  var dataLength = Math.floor(receivedString.length/3);
-  const buffer = new ArrayBuffer(dataLength);
-  var data = new Uint8Array(buffer);
-  for (let i = 0; i < dataLength; i++) {
-      data[i] = Number(receivedString.substring(i*3,(i+1)*3));
-  }
-  
-  if (dataLength < 50) return; // 28(ALL) + 22(SETX)
-
-  let offset = 0;
-  
+  const readTriplet = (i) => Number(receivedString.substring(i * 3, (i + 1) * 3));
+  const minHeaderTriplets = 51; // 28(ALL) + 22(SETX) + 1(nameLen)
+  if (receivedString.length < 3 * minHeaderTriplets) return;
+  let ti = 0;
   // 1. ALL data (28 bytes)
-  iWeight = data[offset++];
-  iAge = data[offset++];
-  iHeight = data[offset++];
-  iEyeToHip = data[offset++];
-  indexSex = data[offset++];
-  valueSensory = data[offset++];
-  valueMoisture = data[offset++];
-  valueActivity = data[offset++];
-  valueMobility = data[offset++];
-  valueNutrition = data[offset++];
-  valueShear = data[offset++];
-  weight = data[offset++];
-  setStaticPressure = data[offset++];
-  setAutofirmPressure = data[offset++];
-  setDurationRedistribute = data[offset++];
-  setDurationAlternating = data[offset++];
-  setAutoTurnAngle = data[offset++];
-  operatingModeSelected = data[offset++];
-  minuteToNextRedistribute = data[offset++];
-  minuteToNextAlternating = data[offset++];
-  minuteToNextAutoturn = data[offset++];
-  minuteToNextMixedModeAction = data[offset++];
-  percentPressurePoints = data[offset++];
-  midBodyWidth = data[offset++];
-  midBodyHeight = data[offset++];
-  columnsEyeToHip = data[offset++];
-  columnsEyeToHeel = data[offset++];
-  degreeHipToThighs = data[offset++];
-
+  iWeight = readTriplet(ti++); 
+  iAge = readTriplet(ti++);
+  iHeight = readTriplet(ti++);
+  iEyeToHip = readTriplet(ti++);
+  indexSex = readTriplet(ti++);
+  valueSensory = readTriplet(ti++);
+  valueMoisture = readTriplet(ti++);
+  valueActivity = readTriplet(ti++);
+  valueMobility = readTriplet(ti++);
+  valueNutrition = readTriplet(ti++);
+  valueShear = readTriplet(ti++);
+  iBradenScore = readTriplet(ti++);
+  setStaticPressure = readTriplet(ti++);
+  setAutofirmPressure = readTriplet(ti++);
+  setDurationRedistribute = readTriplet(ti++);
+  setDurationAlternating = readTriplet(ti++);
+  setAutoTurnAngle = readTriplet(ti++);
+  operatingModeSelected = readTriplet(ti++);
+  minuteToNextRedistribute = readTriplet(ti++);
+  minuteToNextAlternating = readTriplet(ti++);
+  minuteToNextAutoturn = readTriplet(ti++);
+  minuteToNextMixedModeAction = readTriplet(ti++);
+  percentPressurePoints = readTriplet(ti++);
+  midBodyWidth = readTriplet(ti++);
+  midBodyHeight = readTriplet(ti++);
+  columnsEyeToHip = readTriplet(ti++);
+  columnsEyeToHeel = readTriplet(ti++);
+  degreeHipToThighs = readTriplet(ti++);
   // 2. SETX data (22 bytes)
-  let setxHeader = data[offset++];
+  let setxHeader = readTriplet(ti++);
   if (setxHeader == 1) {
-    bNoPillowMassage = data[offset++] == 1;
-    bNoCooling = data[offset++] == 1;
-    bRedistPlusAlter = data[offset++] == 1;
-
-    AUTOTURN_INTERVAL = data[offset++];
-    NUMBER_OF_TURNS = data[offset++];
-    SIDEBAG_FILL_INTERVAL = data[offset++];
-    LEG_AIRBAG_INTERVAL = data[offset++];
-    POSTURE_CHECK_INTERVAL = data[offset++];
-    HOLD_TIME_TO_COOL_VALVES = data[offset++];
-
-    PRESSURE_FIRM = data[offset++];
-    PRESSURE_SITTING = data[offset++];
-    PRESSURE_RELEASED = data[offset++];
-    PRESSURE_MAX = data[offset++];
-    PRESSURE_HYSTERESIS = data[offset++];
-
-    MIN_MATTRESS_TEMP_C = data[offset++];
-    MAX_MATTRESS_TEMP_C = data[offset++];
-    MAX_MATTRESS_RH = data[offset++];
-    DELTA_TEMPERATURE_C = data[offset++];
-    HEATSINK_MAX_TEMP_C = data[offset++];
-    bCaregiverAlert = data[offset++] == 1;
-    bFaultAlert = data[offset++] == 1;
+    bNoPillowMassage = readTriplet(ti++) == 1;
+    bNoCooling = readTriplet(ti++) == 1;
+    bRedistPlusAlter = readTriplet(ti++) == 1;
+    AUTOTURN_INTERVAL = readTriplet(ti++);
+    NUMBER_OF_TURNS = readTriplet(ti++);
+    SIDEBAG_FILL_INTERVAL = readTriplet(ti++);
+    LEG_AIRBAG_INTERVAL = readTriplet(ti++);
+    POSTURE_CHECK_INTERVAL = readTriplet(ti++);
+    HOLD_TIME_TO_COOL_VALVES = readTriplet(ti++);
+    PRESSURE_FIRM = readTriplet(ti++);
+    PRESSURE_SITTING = readTriplet(ti++);
+    PRESSURE_RELEASED = readTriplet(ti++);
+    PRESSURE_MAX = readTriplet(ti++);
+    PRESSURE_HYSTERESIS = readTriplet(ti++);
+    MIN_MATTRESS_TEMP_C = readTriplet(ti++);
+    MAX_MATTRESS_TEMP_C = readTriplet(ti++);
+    MAX_MATTRESS_RH = readTriplet(ti++);
+    DELTA_TEMPERATURE_C = readTriplet(ti++);
+    HEATSINK_MAX_TEMP_C = readTriplet(ti++);
+    bCaregiverAlert = readTriplet(ti++) == 1;
+    bFaultAlert = readTriplet(ti++) == 1;
   } else {
-    offset += 21; // Skip rest of SETX if header not 1
+    ti += 21; // Skip rest of SETX if header not 1
+  }
+  const nameLen = readTriplet(ti++);
+  const expectedTripletLen = 3 * (minHeaderTriplets + nameLen);
+  const expectedAsciiLen = 3 * minHeaderTriplets + nameLen;
+  let nameStr = "";
+  if (receivedString.length >= expectedTripletLen) {
+    for (let i = 0; i < nameLen; i++) {
+      const code = readTriplet(ti++);
+      nameStr += String.fromCharCode(code);
+    }
+  } else if (receivedString.length >= expectedAsciiLen) {
+    const asciiStart = 3 * minHeaderTriplets;
+    const asciiEnd = asciiStart + nameLen;
+    nameStr = receivedString.substring(asciiStart, asciiEnd);
+  }
+  if (nameStr.length > 0) {
+    const elName = document.getElementById('taName');
+    if (elName) elName.value = nameStr;
   }
 
-  // 4. Name data
-  if (offset < dataLength) {
-    let nameLen = data[offset++];
-    let nameStr = "";
-    for (let i = 0; i < nameLen && offset < dataLength; i++) {
-      nameStr += String.fromCharCode(data[offset++]);
+  // Optional: Reminders text follows name (len + chars)
+  if (ti * 3 <= receivedString.length - 3) {
+    const remLen = readTriplet(ti++);
+    let remStr = "";
+    if ((ti + remLen) * 3 <= receivedString.length) {
+      for (let i = 0; i < remLen; i++) {
+        const code = readTriplet(ti++);
+        remStr += String.fromCharCode(code);
+      }
+      const elRem = document.getElementById("taReminders");
+      if (elRem) elRem.value = remStr;
     }
-    document.getElementById('taName').value = nameStr;
   }
+  window.__seenAllx = true;
 
   // Apply to UI controls that reflect mode and settings
   if (typeof modeSelect !== "undefined" && modeSelect) {
@@ -1242,10 +1354,6 @@ function loadALLXData(receivedString) {
     rangeDurationAlternating.value = setDurationAlternating;
     lblDurationAlternating.innerHTML = setDurationAlternating;
   }
-  if (rangeAutoTurnAngle && lblAutoTurnAngle) {
-    rangeAutoTurnAngle.value = setAutoTurnAngle;
-    lblAutoTurnAngle.innerHTML = setAutoTurnAngle;
-  }
   if (typeof chkNoTurn !== "undefined" && chkNoTurn) chkNoTurn.checked = bNotToTurn;
   if (typeof chkNoTurnRight !== "undefined" && chkNoTurnRight) chkNoTurnRight.checked = bNotToTurnRight;
   if (typeof chkNoTurnLeft !== "undefined" && chkNoTurnLeft) chkNoTurnLeft.checked = bNotToTurnLeft;
@@ -1254,6 +1362,171 @@ function loadALLXData(receivedString) {
   if (typeof chkCaregiverAlert !== "undefined" && chkCaregiverAlert) chkCaregiverAlert.checked = bCaregiverAlert;
   if (typeof chkFaultAlert !== "undefined" && chkFaultAlert) chkFaultAlert.checked = bFaultAlert;
 
+  // Settings page values
+  const setNumber = (id, v) => { const el = document.getElementById(id); if (el) el.value = String(v); };
+  const setCheck = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  setNumber("taAutoturnInterval", AUTOTURN_INTERVAL);
+  setNumber("taNumberOfTurns", NUMBER_OF_TURNS);
+  setNumber("taSidebagFillInterval", SIDEBAG_FILL_INTERVAL);
+  setNumber("taLegAirbagInterval", LEG_AIRBAG_INTERVAL);
+  setNumber("taPostureCheckInterval", POSTURE_CHECK_INTERVAL);
+  setNumber("taHoldTimeToCoolValves", HOLD_TIME_TO_COOL_VALVES);
+  setNumber("taPressureFirm", PRESSURE_FIRM);
+  setNumber("taPressureSitting", PRESSURE_SITTING);
+  setNumber("taPressureReleased", PRESSURE_RELEASED);
+  setNumber("taPressureMax", PRESSURE_MAX);
+  setNumber("taPressureHysteresis", PRESSURE_HYSTERESIS);
+  setNumber("taMinMattressTempC", MIN_MATTRESS_TEMP_C);
+  setNumber("taMaxMattressTempC", MAX_MATTRESS_TEMP_C);
+  setNumber("taMaxMattressRh", MAX_MATTRESS_RH);
+  setNumber("taDeltaTemperatureC", DELTA_TEMPERATURE_C);
+  setNumber("taHeatsinkMaxTempC", HEATSINK_MAX_TEMP_C);
+  setCheck("noPillowMassage", bNoPillowMassage);
+  setCheck("noCooling", bNoCooling);
+  setCheck("redistPlusAlter", bRedistPlusAlter);
+  setCheck("caregiverAlert", bCaregiverAlert);
+  setCheck("faultAlert", bFaultAlert);
+
+  updateUserInfoToDisplay();
+  saveSettings();
+}
+
+function loadALLXDataBytes(payload) {
+  // payload is Uint8Array containing 51 header bytes + nameLen + name bytes
+  if (!payload || payload.length < 51) return;
+  let ti = 0;
+  // 1. ALL data (28 bytes)
+  iWeight = payload[ti++]; 
+  iAge = payload[ti++];
+  iHeight = payload[ti++];
+  iEyeToHip = payload[ti++];
+  indexSex = payload[ti++];
+  valueSensory = payload[ti++];
+  valueMoisture = payload[ti++];
+  valueActivity = payload[ti++];
+  valueMobility = payload[ti++];
+  valueNutrition = payload[ti++];
+  valueShear = payload[ti++];
+  iBradenScore = payload[ti++];
+  setStaticPressure = payload[ti++];
+  setAutofirmPressure = payload[ti++];
+  setDurationRedistribute = payload[ti++];
+  setDurationAlternating = payload[ti++];
+  setAutoTurnAngle = payload[ti++];
+  operatingModeSelected = payload[ti++];
+  minuteToNextRedistribute = payload[ti++];
+  minuteToNextAlternating = payload[ti++];
+  minuteToNextAutoturn = payload[ti++];
+  minuteToNextMixedModeAction = payload[ti++];
+  percentPressurePoints = payload[ti++];
+  midBodyWidth = payload[ti++];
+  midBodyHeight = payload[ti++];
+  columnsEyeToHip = payload[ti++];
+  columnsEyeToHeel = payload[ti++];
+  degreeHipToThighs = payload[ti++];
+  // 2. SETX data (22 bytes)
+  const setxHeader = payload[ti++];
+  if (setxHeader === 1) {
+    bNoPillowMassage = payload[ti++] === 1;
+    bNoCooling = payload[ti++] === 1;
+    bRedistPlusAlter = payload[ti++] === 1;
+    AUTOTURN_INTERVAL = payload[ti++];
+    NUMBER_OF_TURNS = payload[ti++];
+    SIDEBAG_FILL_INTERVAL = payload[ti++];
+    LEG_AIRBAG_INTERVAL = payload[ti++];
+    POSTURE_CHECK_INTERVAL = payload[ti++];
+    HOLD_TIME_TO_COOL_VALVES = payload[ti++];
+    PRESSURE_FIRM = payload[ti++];
+    PRESSURE_SITTING = payload[ti++];
+    PRESSURE_RELEASED = payload[ti++];
+    PRESSURE_MAX = payload[ti++];
+    PRESSURE_HYSTERESIS = payload[ti++];
+    MIN_MATTRESS_TEMP_C = payload[ti++];
+    MAX_MATTRESS_TEMP_C = payload[ti++];
+    MAX_MATTRESS_RH = payload[ti++];
+    DELTA_TEMPERATURE_C = payload[ti++];
+    HEATSINK_MAX_TEMP_C = payload[ti++];
+    bCaregiverAlert = payload[ti++] === 1;
+    bFaultAlert = payload[ti++] === 1;
+  } else {
+    ti += 21;
+  }
+  const nameLen = payload[ti++];
+  let nameStr = "";
+  if (nameLen > 0 && ti + nameLen <= payload.length) {
+    for (let i = 0; i < nameLen; i++) {
+      nameStr += String.fromCharCode(payload[ti++]);
+    }
+    const elName = document.getElementById('taName');
+    if (elName) elName.value = nameStr;
+  }
+  // Optional: Reminders text follows name (len + chars)
+  if (ti < payload.length) {
+    const remLen = payload[ti++];
+    if (remLen > 0 && ti + remLen <= payload.length) {
+      let remStr = "";
+      for (let i = 0; i < remLen; i++) remStr += String.fromCharCode(payload[ti++]);
+      const elRem = document.getElementById('taReminders');
+      if (elRem) elRem.value = remStr;
+    }
+  }
+  window.__seenAllx = true;
+  // Apply to UI
+  if (typeof modeSelect !== "undefined" && modeSelect) {
+    if (operatingModeSelected >= 0 && operatingModeSelected < modeSelect.options.length) {
+      modeSelect.selectedIndex = operatingModeSelected;
+      executionMode = modeSelect.value;
+      executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
+      if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minuteToNextMixedModeAction + " minutes";
+      else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minuteToNextMixedModeAction + " minutes";
+      else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
+      else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minuteToNextMixedModeAction + " minutes";
+      else pressureReleaseActionMsg.innerHTML = "";
+    }
+  }
+  if (lblStaticPressure && rangeStaticPressure) {
+    rangeStaticPressure.value = setStaticPressure;
+    lblStaticPressure.innerHTML = setStaticPressure;
+  }
+  if (rangeDurationRedistribute && lblDurationRedistribute) {
+    rangeDurationRedistribute.value = setDurationRedistribute;
+    lblDurationRedistribute.innerHTML = setDurationRedistribute;
+  }
+  if (rangeDurationAlternating && lblDurationAlternating) {
+    rangeDurationAlternating.value = setDurationAlternating;
+    lblDurationAlternating.innerHTML = setDurationAlternating;
+  }
+  if (typeof chkNoTurn !== "undefined" && chkNoTurn) chkNoTurn.checked = bNotToTurn;
+  if (typeof chkNoTurnRight !== "undefined" && chkNoTurnRight) chkNoTurnRight.checked = bNotToTurnRight;
+  if (typeof chkNoTurnLeft !== "undefined" && chkNoTurnLeft) chkNoTurnLeft.checked = bNotToTurnLeft;
+  if (typeof chkNoMoveBack !== "undefined" && chkNoMoveBack) chkNoMoveBack.checked = bNotToMoveBack;
+  if (typeof chkNoMoveLeg !== "undefined" && chkNoMoveLeg) chkNoMoveLeg.checked = bNotToMoveLeg;
+  if (typeof chkCaregiverAlert !== "undefined" && chkCaregiverAlert) chkCaregiverAlert.checked = bCaregiverAlert;
+  if (typeof chkFaultAlert !== "undefined" && chkFaultAlert) chkFaultAlert.checked = bFaultAlert;
+  // Settings page values
+  const setNumber = (id, v) => { const el = document.getElementById(id); if (el) el.value = String(v); };
+  const setCheck = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  setNumber("taAutoturnInterval", AUTOTURN_INTERVAL);
+  setNumber("taNumberOfTurns", NUMBER_OF_TURNS);
+  setNumber("taSidebagFillInterval", SIDEBAG_FILL_INTERVAL);
+  setNumber("taLegAirbagInterval", LEG_AIRBAG_INTERVAL);
+  setNumber("taPostureCheckInterval", POSTURE_CHECK_INTERVAL);
+  setNumber("taHoldTimeToCoolValves", HOLD_TIME_TO_COOL_VALVES);
+  setNumber("taPressureFirm", PRESSURE_FIRM);
+  setNumber("taPressureSitting", PRESSURE_SITTING);
+  setNumber("taPressureReleased", PRESSURE_RELEASED);
+  setNumber("taPressureMax", PRESSURE_MAX);
+  setNumber("taPressureHysteresis", PRESSURE_HYSTERESIS);
+  setNumber("taMinMattressTempC", MIN_MATTRESS_TEMP_C);
+  setNumber("taMaxMattressTempC", MAX_MATTRESS_TEMP_C);
+  setNumber("taMaxMattressRh", MAX_MATTRESS_RH);
+  setNumber("taDeltaTemperatureC", DELTA_TEMPERATURE_C);
+  setNumber("taHeatsinkMaxTempC", HEATSINK_MAX_TEMP_C);
+  setCheck("noPillowMassage", bNoPillowMassage);
+  setCheck("noCooling", bNoCooling);
+  setCheck("redistPlusAlter", bRedistPlusAlter);
+  setCheck("caregiverAlert", bCaregiverAlert);
+  setCheck("faultAlert", bFaultAlert);
   updateUserInfoToDisplay();
   saveSettings();
 }
@@ -1277,7 +1550,7 @@ function loadALLData(receivedString) {
   valueMobility = data[8];
   valueNutrition = data[9];
   valueShear = data[10];
-  weight = data[11];
+  iBradenScore = data[11];
   setStaticPressure = data[12];
   setAutofirmPressure = data[13];
   setDurationRedistribute = data[14];
@@ -1349,7 +1622,7 @@ function loadAndExecuteMPR(receivedString) {
 function saveSettings() {
   if (bResetToDefaults) {
     bResetToDefaults = false;
-    setStaticPressure = 22;    
+    setStaticPressure = 32;    
     setDurationRedistribute = 30;
     setDurationAlternating = 5; minuteToNextAlternating = setDurationAlternating;
     setAutoTurnAngle = 15;
@@ -1385,14 +1658,12 @@ function saveSettings() {
     HEATSINK_MAX_TEMP_C = 65;
   }
   
-  // if weight is changed, also want to change and update the label of autofirm pressure. So have to always do it since we don't know what has been changed.
-  setAutofirmPressure = 0.0022*weight*weight-0.1679*weight+29.226; // always setAutofirmPressure when weight changes
-  if (setAutofirmPressure < setStaticPressure) setAutofirmPressure = setStaticPressure;
+  // Align autofirm with firm pressure
+  setAutofirmPressure = PRESSURE_FIRM;
 
   setDurationRedistribute = clampIntInRange(setDurationRedistribute, 15, 60);
   setDurationAlternating = clampIntInRange(setDurationAlternating, 1, 15);
-  const staticPressureUi = clampIntInRange(setStaticPressure + 10, 25, 40);
-  setStaticPressure = staticPressureUi - 10;
+  setStaticPressure = clampIntInRange(setStaticPressure, 25, 40);
 
   AUTOTURN_INTERVAL = clampIntInRange(AUTOTURN_INTERVAL, 15, 60);
   NUMBER_OF_TURNS = clampIntInRange(NUMBER_OF_TURNS, 1, 4);
@@ -1403,7 +1674,7 @@ function saveSettings() {
 
   PRESSURE_FIRM = clampIntInRange(PRESSURE_FIRM, 32, 52);
   PRESSURE_SITTING = clampIntInRange(PRESSURE_SITTING, PRESSURE_FIRM, PRESSURE_FIRM + 20);
-  PRESSURE_RELEASED = clampIntInRange(PRESSURE_RELEASED, 10, staticPressureUi);
+  PRESSURE_RELEASED = clampIntInRange(PRESSURE_RELEASED, 10, setStaticPressure);
   PRESSURE_MAX = clampIntInRange(PRESSURE_MAX, 60, 80);
   PRESSURE_HYSTERESIS = clampIntInRange(PRESSURE_HYSTERESIS, 2, 8);
 
@@ -1414,10 +1685,10 @@ function saveSettings() {
   HEATSINK_MAX_TEMP_C = clampIntInRange(HEATSINK_MAX_TEMP_C, 65, 75);
 
   // update display
-  setValue("rangeStaticPressure", staticPressureUi);
+  setValue("rangeStaticPressure", setStaticPressure);
   setValue("rangeDurationRedistribute", setDurationRedistribute);
   setValue("rangeDurationAlternating", setDurationAlternating);
-  if (lblStaticPressure) lblStaticPressure.innerHTML = String(staticPressureUi);
+  if (lblStaticPressure) lblStaticPressure.innerHTML = String(setStaticPressure);
   if (lblDurationRedistribute) lblDurationRedistribute.innerHTML = String(setDurationRedistribute);
   if (lblDurationAlternating) lblDurationAlternating.innerHTML = String(setDurationAlternating);
 
@@ -1452,7 +1723,7 @@ function saveSettings() {
   setValue("taDeltaTemperatureC", DELTA_TEMPERATURE_C);
   setValue("taHeatsinkMaxTempC", HEATSINK_MAX_TEMP_C);
 
-  setMinMax("taPressureReleased", 10, staticPressureUi);
+  setMinMax("taPressureReleased", 10, setStaticPressure);
   setMinMax("taPressureSitting", PRESSURE_FIRM, PRESSURE_FIRM + 20);
 
   // save to file
@@ -1515,6 +1786,14 @@ function executeSendAllX() {
   for (let i = 0; i < maxNameLen; i++) {
     s += get3DigitString(nameStr.charCodeAt(i));
   }
+  // 5. Optional: Reminders text (up to 200 chars)
+  const remEl = document.getElementById("taReminders");
+  let remStr = remEl && typeof remEl.value === "string" ? remEl.value : "";
+  if (remStr.length > 200) remStr = remStr.substring(0, 200);
+  s += get3DigitString(remStr.length);
+  for (let i = 0; i < remStr.length; i++) {
+    s += get3DigitString(remStr.charCodeAt(i));
+  }
 
   writeOnCharacteristic(s);
 }
@@ -1524,19 +1803,33 @@ function executeSendAll() {
 }
 
 function updateUserInfoFromDisplay() {
-  iWeight = Number(document.getElementById("taBodyWeight").value);
-  iHeight = Number(document.getElementById("taBodyHeight").value);
+  const elWeight = document.getElementById("taBodyWeight");
+  const elAge = document.getElementById("taAge");
+  const elHeight = document.getElementById("taBodyHeight");
+  const elEyeToHip = document.getElementById("taEyeToHip");
+  const elSex = document.getElementById("ddSex");
+  const elSensory = document.getElementById("ddSensory");
+  const elMoisture = document.getElementById("ddMoisture");
+  const elActivity = document.getElementById("ddActivity");
+  const elMobility = document.getElementById("ddMobility");
+  const elNutrition = document.getElementById("ddNutrition");
+  const elShear = document.getElementById("ddShear");
+  if (elWeight) iWeight = Number(elWeight.value);
+  if (elAge) iAge = Number(elAge.value);
+  if (elHeight) iHeight = Number(elHeight.value);
+  if (elEyeToHip) iEyeToHip = Number(elEyeToHip.value);
+  if (elSex) indexSex = Number(elSex.value);
   if (iHeight > 100) fBMI = iWeight * 10000 / (iHeight * iHeight);
   // console.log("iWeight: ", iWeight);
   // console.log("iHeight: ", iHeight);
   // console.log("fBMI: ", fBMI);
-  lblBMI.textContent = parseFloat(String(fBMI)).toFixed(2);
-  valueSensory = Number(ddSensory.value);
-  valueMoisture = Number(ddMoisture.value);
-  valueActivity = Number(ddActivity.value);
-  valueMobility = Number(ddMobility.value);
-  valueNutrition = Number(ddNutrition.value);
-  valueShear = Number(ddShear.value);
+  if (typeof lblBMI !== "undefined" && lblBMI) lblBMI.textContent = parseFloat(String(fBMI)).toFixed(2);
+  if (elSensory) valueSensory = Number(elSensory.value);
+  if (elMoisture) valueMoisture = Number(elMoisture.value);
+  if (elActivity) valueActivity = Number(elActivity.value);
+  if (elMobility) valueMobility = Number(elMobility.value);
+  if (elNutrition) valueNutrition = Number(elNutrition.value);
+  if (elShear) valueShear = Number(elShear.value);
   iBradenScore = valueSensory + valueMoisture + valueActivity + valueMobility + valueNutrition + valueShear;
   if (lblBradenScoreUser) lblBradenScoreUser.textContent = String(iBradenScore);
   const lblBradenScorePRS = document.getElementById("lblBradenScorePRS");
@@ -1548,27 +1841,43 @@ function updateUserInfoFromDisplay() {
 }
 
 function updateUserInfoToDisplay() {
-  document.getElementById("taBodyWeight").textContent = String(iWeight);
-  document.getElementById("taAge").textContent = String(iAge);
-  document.getElementById("taBodyHeight").textContent = String(iHeight);
-  document.getElementById("taEyeToHip").textContent = String(iEyeToHip);
-  ddSex.value = indexSex;
-  ddSensory.value = valueSensory;
-  ddMoisture.value = valueMoisture;
-  ddActivity.value = valueActivity;
-  ddMobility.value = valueMobility;
-  ddNutrition.value = valueNutrition;
-  ddShear.value = valueShear;
+  const setIfExists = (id, prop, value) => {
+    const el = document.getElementById(id);
+    if (el && prop in el) el[prop] = String(value);
+  };
+  setIfExists("taBodyWeight", "value", iWeight);
+  setIfExists("taAge", "value", iAge);
+  setIfExists("taBodyHeight", "value", iHeight);
+  setIfExists("taEyeToHip", "value", iEyeToHip);
+  if (ddSex) ddSex.value = indexSex;
+  const dd = (id) => document.getElementById(id);
+  const s = dd("ddSensory"); if (s) s.value = String(valueSensory);
+  const m = dd("ddMoisture"); if (m) m.value = String(valueMoisture);
+  const a = dd("ddActivity"); if (a) a.value = String(valueActivity);
+  const mob = dd("ddMobility"); if (mob) mob.value = String(valueMobility);
+  const n = dd("ddNutrition"); if (n) n.value = String(valueNutrition);
+  const sh = dd("ddShear"); if (sh) sh.value = String(valueShear);
 
   if (iHeight > 100) fBMI = iWeight * 10000 / (iHeight * iHeight);
   iBradenScore = valueSensory + valueMoisture + valueActivity + valueMobility + valueNutrition + valueShear;
 
-  document.getElementById("taBodyPercent").textContent = String(percentPressurePoints);
-  document.getElementById("taBodyWidth").textContent = String(midBodyWidth);
-  document.getElementById("taBodyHeight").textContent = String(midBodyHeight);
-  document.getElementById("taEye2HipCols").textContent = String(columnsEyeToHip);
-  document.getElementById("taEye2HeelCols").textContent = String(columnsEyeToHeel);
-  document.getElementById("taHip2ThighsAngle").textContent = String(degreeHipToThighs);
+  const setTextIfExists = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  };
+  // Show BMI (1 decimal) and Braden totals on User Information and PRS headers
+  if (typeof lblBMI !== "undefined" && lblBMI) lblBMI.textContent = parseFloat(String(fBMI)).toFixed(1);
+  const lblBradenScoreUser = document.getElementById("lblBradenScoreUser");
+  if (lblBradenScoreUser) lblBradenScoreUser.textContent = String(iBradenScore);
+  const lblBradenScorePRS = document.getElementById("lblBradenScorePRS");
+  if (lblBradenScorePRS) lblBradenScorePRS.textContent = String(iBradenScore);
+
+  setTextIfExists("taBodyPercent", percentPressurePoints);
+  setTextIfExists("taBodyWidth", midBodyWidth);
+  setTextIfExists("taBodyHeight", midBodyHeight);
+  setTextIfExists("taEye2HipCols", columnsEyeToHip);
+  setTextIfExists("taEye2HeelCols", columnsEyeToHeel);
+  setTextIfExists("taHip2ThighsAngle", degreeHipToThighs);
 }
 
 function setSaveSmartbedControlInfoAndReturn() {
@@ -1834,9 +2143,8 @@ function changeSliderSetting(setting) {
   const v = Number(el.value);
 
   if (setting == "rangeStaticPressure") {
-    const ui = clampIntInRange(v, 25, 40);
-    setStaticPressure = ui - 10;
-    el.value = String(ui);
+    setStaticPressure = clampIntInRange(v, 25, 40);
+    el.value = String(setStaticPressure);
     if (lblStaticPressure) lblStaticPressure.innerHTML = el.value;
   }
   else if (setting == "rangeDurationRedistribute") {

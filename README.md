@@ -118,3 +118,12 @@ Use these conventions to avoid breaking references when you move files:
 - CSS: `src/style.css`
 - Shared JS: `common/<file>.js`
 - App-specific JS: `src/<file>.js`
+
+## Protocol and BLE notes
+
+- ACM delays its first `#ALLX` by ~6 seconds after connect. The UI waits ~7.5s before sending any `#R*` queries.
+- BLE notifications can arrive in multiple short chunks. The app:
+  - Accumulates ASCII in an internal buffer and only processes a frame once complete or after a brief quiet period (~180ms).
+  - Does not attempt to parse partial frames, avoiding truncated `#ALLX` updates.
+- Pressure map packets `#PSMAP##` / `#PZMAP##` are handled as binary after an 8‑byte header; the column-start byte and 120 payload bytes are extracted per package.
+- On connect, initial requests are serialized with gaps: `#RALLX → #RALL → #RSETX → #RSETS`, preventing “GATT operation already in progress”.
