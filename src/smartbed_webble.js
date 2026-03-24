@@ -613,12 +613,8 @@ function handleCharacteristicChange(event){
       modeSelect.selectedIndex = modeIdx;
       executionMode = modeIdx;
       executionModeText = modeSelect.options[modeIdx].text;
-      if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minute + " minutes";
-      else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minute + " minutes";
-      else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minute + " minutes";
-      else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minute + " minutes";
-      else pressureReleaseActionMsg.innerHTML = "";
-      pressureReleaseActionMsg.style.visibility = 'visible';
+      pressureReleaseActionMsg.innerHTML = "";
+      pressureReleaseActionMsg.style.visibility = 'hidden';
     }
     window.__rxBytes = window.__rxBytes.slice(14);
   }
@@ -685,12 +681,8 @@ function writeOnCharacteristic(value){
             executionMode = idx;
             executionModeText = modeSelect.options[idx].text;
             const minute = minuteToNextMixedModeAction;
-            if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minute + " minutes";
-            else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minute + " minutes";
-            else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minute + " minutes";
-            else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minute + " minutes";
-            else pressureReleaseActionMsg.innerHTML = "";
-            pressureReleaseActionMsg.style.visibility = 'visible';
+            pressureReleaseActionMsg.innerHTML = "";
+            pressureReleaseActionMsg.style.visibility = 'hidden';
           }
         }
       })
@@ -809,15 +801,8 @@ function processReceivedString(rx_data) {
       }
       else if (rx_data.substring(0, 8) == "#AIRM###") {
         modeSelect.selectedIndex = Number(rx_data.substring(8,11));
-        var minuteToNextMixedModeAction = Number(rx_data.substring(11,14));
-        //runModeSelect(); // is this needed?
-        pressureReleaseActionMsg.style.visibility = 'visible';
-        executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
-        if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minuteToNextMixedModeAction + " minutes";
-        else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minuteToNextMixedModeAction + " minutes";
-        else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
-        else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minuteToNextMixedModeAction + " minutes";
-        else pressureReleaseActionMsg.innerHTML = "";
+        pressureReleaseActionMsg.style.visibility = 'hidden';
+        pressureReleaseActionMsg.innerHTML = "";
       }
       else if (rx_data.substring(0, 5) == "#SETS") {
         loadSETSData(rx_data.substring(5, rx_data.length));
@@ -827,6 +812,31 @@ function processReceivedString(rx_data) {
       }
       else if (rx_data.substring(0, 5) == "#ALLX") {
         loadALLXData(rx_data.substring(5, rx_data.length));
+      }
+      else if (rx_data.substring(0, 5) == "#REMS") {
+        const len = Number(rx_data.substring(5,8));
+        let s = "";
+        for (let i = 0; i < len; i++) {
+          const code = Number(rx_data.substring(8 + i*3, 11 + i*3));
+          s += String.fromCharCode(code);
+        }
+        const elRem = document.getElementById("taReminders");
+        if (elRem) {
+          elRem.value = s;
+          if (typeof updateRemCounter === "function") updateRemCounter();
+        }
+      }
+      else if (rx_data.substring(0, 5) == "#THRS") {
+        const vals = [];
+        for (let i = 0; i < 6; i++) vals.push(Number(rx_data.substring(5 + i*3, 8 + i*3)));
+        const [P, DT10, S, E, SC, FC] = vals;
+        const setVal = (id,val)=>{ const el=document.getElementById(id); if (el) el.value = val; };
+        setVal("thrOccPressDelta", P);
+        setVal("thrOccTempDeltaC", (DT10/10).toFixed(1));
+        setVal("thrSettleSec", S);
+        setVal("thrEdgeHighDelta", E);
+        setVal("thrSitCenterDelta", SC);
+        setVal("thrFewCountMax", FC);
       }
       else if (rx_data.substring(0, 5) == "#ALL ") {
         loadALLData(rx_data.substring(5, rx_data.length));
@@ -1740,6 +1750,24 @@ function setUserInformation() {
   if (window.SmartbedUICommon) window.SmartbedUICommon.showUserInformation();
 }
 
+function showExtraSettings() {
+  const setting = document.getElementById("settingContainer");
+  const bg = document.getElementById("backgroundContainer");
+  const extra = document.getElementById("extraSettingsContainer");
+  if (setting) setting.style.display = "none";
+  if (bg) bg.style.display = "none";
+  if (extra) extra.style.display = "block";
+}
+
+function returnFromExtraSettings() {
+  const setting = document.getElementById("settingContainer");
+  const bg = document.getElementById("backgroundContainer");
+  const extra = document.getElementById("extraSettingsContainer");
+  if (extra) extra.style.display = "none";
+  if (bg) bg.style.display = "block";
+  if (setting) setting.style.display = "block";
+}
+
 function setSmartbedControl() {
   if (window.SmartbedUICommon) window.SmartbedUICommon.showSmartbedControl();
 }
@@ -1786,20 +1814,65 @@ function executeSendAllX() {
   for (let i = 0; i < maxNameLen; i++) {
     s += get3DigitString(nameStr.charCodeAt(i));
   }
-  // 5. Optional: Reminders text (up to 200 chars)
-  const remEl = document.getElementById("taReminders");
-  let remStr = remEl && typeof remEl.value === "string" ? remEl.value : "";
-  if (remStr.length > 200) remStr = remStr.substring(0, 200);
-  s += get3DigitString(remStr.length);
-  for (let i = 0; i < remStr.length; i++) {
-    s += get3DigitString(remStr.charCodeAt(i));
-  }
 
-  writeOnCharacteristic(s);
+  // Send #ALLX then (if non-empty) #REMS sequentially to avoid BLE write overlap
+  writeOnCharacteristic(s).then(() => {
+    const remEl = document.getElementById("taReminders");
+    let remStr = remEl && typeof remEl.value === "string" ? remEl.value : "";
+    if (remStr) remStr = remStr.trim();
+    if (remStr.length > 0) {
+      if (remStr.length > 160) remStr = remStr.substring(0, 160);
+      let r = "#REMS";
+      r += get3DigitString(remStr.length);
+      for (let i = 0; i < remStr.length; i++) {
+        r += get3DigitString(remStr.charCodeAt(i));
+      }
+      // slight delay to ensure previous write settles
+      setTimeout(() => writeOnCharacteristic(r), 500);
+    }
+  });
 }
 
 function executeSendAll() {
   executeSendAllX();
+}
+
+function sendThresholdsFromUI() {
+  const p = Number(document.getElementById("thrOccPressDelta")?.value || 5);
+  const dtC = Number(document.getElementById("thrOccTempDeltaC")?.value || 0.7);
+  const s = Number(document.getElementById("thrSettleSec")?.value || 60);
+  const e = Number(document.getElementById("thrEdgeHighDelta")?.value || 15);
+  const sc = Number(document.getElementById("thrSitCenterDelta")?.value || 15);
+  const fc = Number(document.getElementById("thrFewCountMax")?.value || 6);
+  const clamp = (n,min,max)=>Math.max(min,Math.min(max,Math.round(n)));
+  const P = clamp(p,0,30);
+  const DT10 = clamp(Math.round(dtC*10),0,50);
+  const S = clamp(s,0,255);
+  const E = clamp(e,0,40);
+  const SC = clamp(sc,0,40);
+  const FC = clamp(fc,0,10);
+  let sCmd = "#THRS";
+  sCmd += get3DigitString(P);
+  sCmd += get3DigitString(DT10);
+  sCmd += get3DigitString(S);
+  sCmd += get3DigitString(E);
+  sCmd += get3DigitString(SC);
+  sCmd += get3DigitString(FC);
+  writeOnCharacteristic(sCmd);
+}
+
+function requestThresholds() {
+  writeOnCharacteristic("#RTHRS");
+}
+
+function updateRemCounter() {
+  const el = document.getElementById("taReminders");
+  const ctr = document.getElementById("remCounter");
+  if (!el || !ctr) return;
+  let v = el.value || "";
+  if (v.length > 160) v = v.substring(0, 160);
+  if (v !== el.value) el.value = v;
+  ctr.textContent = v.length + "/160";
 }
 
 function updateUserInfoFromDisplay() {
