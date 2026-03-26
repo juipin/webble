@@ -254,54 +254,67 @@
         </div>
       </div>
 
+      <!-- Extra Settings (overlay, same structure as User Information) -->
+      <a name="extraSettingsScreen"></a>
+      <div id="extraSettingsContainer" class="w3-container w3-dark-grey w3-center" style="width:auto; height:480px; padding:56px 16px">
+        <div class="w3-container w3-center my-black" style="width:800px; height:480px; margin-left:auto; position:relative; margin-right:auto">
+          <!-- Static -->
+          <p class="w3-large w3-left-align" style="position:absolute; left:330px; top:10px; color:orange">Extra Settings</p>
+          <!-- Show -->
+          <!-- Control -->
+          <button id="btnReturnExtraSettings" onclick="returnFromExtraSettings()" class="animatedButton w3-small" style="position:absolute; right:20px; top:8px">Return</button>
+          
+          <div class="settings-grid" style="position:absolute; left:25px; right:25px; top:52px; bottom:12px">
+            <div class="settings-col">
+              <div class="settings-col-title w3-medium">Detection Thresholds</div>
+              <div class="settings-row w3-small">
+                <label for="thrOccPressDelta">Occ ΔP</label>
+                <input type="number" id="thrOccPressDelta" min="0" max="30" step="1" value="5" onchange="sendThresholdsFromUI()">
+                <span class="settings-unit">mmHg</span>
+              </div>
+
+              <div class="settings-row w3-small">
+                <label for="thrOccTempDeltaC">Occ ΔT</label>
+                <input type="number" id="thrOccTempDeltaC" min="0" max="5" step="0.1" value="0.7" onchange="sendThresholdsFromUI()">
+                <span class="settings-unit">°C</span>
+              </div>
+
+              <div class="settings-row w3-small">
+                <label for="thrSettleSec">Settle</label>
+                <input type="number" id="thrSettleSec" min="10" max="300" step="5" value="60" onchange="sendThresholdsFromUI()">
+                <span class="settings-unit">s</span>
+              </div>
+
+              <div class="settings-row w3-small">
+                <label for="thrEdgeHighDelta">Edge ΔP</label>
+                <input type="number" id="thrEdgeHighDelta" min="5" max="40" step="1" value="15" onchange="sendThresholdsFromUI()">
+                <span class="settings-unit">mmHg</span>
+              </div>
+
+              <div class="settings-row w3-small">
+                <label for="thrSitCenterDelta">Center ΔP</label>
+                <input type="number" id="thrSitCenterDelta" min="5" max="40" step="1" value="15" onchange="sendThresholdsFromUI()">
+                <span class="settings-unit">mmHg</span>
+              </div>
+
+              <div class="settings-row w3-small">
+                <label for="thrFewCountMax">Few max</label>
+                <input type="number" id="thrFewCountMax" min="1" max="10" step="1" value="6" onchange="sendThresholdsFromUI()">
+                <span class="settings-unit"></span>
+              </div>
+
+              <button class="animatedButton w3-small" style="margin-top:8px; padding:6px 12px" onclick="requestThresholds()">Request Thresholds</button>
+            </div>
+            <div class="settings-col"></div>
+            <div class="settings-col"></div>
+          </div>
+          
+        </div>
+      </div>
+
       <!-- Background -->
       <a name="background"> </a>
       <div class="w3-container w3-dark-grey w3-center" style="padding:56px 16px">
-        <!-- Extra Settings (overlay, same structure as User Information) -->
-        <div id="extraSettingsContainer" class="w3-container w3-dark-grey w3-center" style="display:none; width:auto; height:480px; padding:56px 16px; z-index:1000">
-          <div class="w3-container w3-center my-black" style="width:800px; height:480px; margin-left:auto; position:relative; margin-right:auto">
-            <p class="w3-large" style="position:absolute; left:50%; top:8px; transform:translateX(-50%); color:orange">Extra Settings</p>
-            <button id="btnReturnExtraSettings" onclick="returnFromExtraSettings()" class="animatedButton w3-small" style="position:absolute; right:20px; top:8px">Return</button>
-            <div class="settings-grid" style="position:absolute; left:25px; right:25px; top:52px; bottom:12px">
-              <div class="settings-col">
-                <div class="settings-col-title w3-medium">Detection Thresholds</div>
-                <div class="settings-row w3-small">
-                  <label for="thrOccPressDelta">Occ ΔP</label>
-                  <input type="number" id="thrOccPressDelta" min="0" max="30" step="1" value="5" onchange="sendThresholdsFromUI()">
-                  <span class="settings-unit">mmHg</span>
-                </div>
-                <div class="settings-row w3-small">
-                  <label for="thrOccTempDeltaC">Occ ΔT</label>
-                  <input type="number" id="thrOccTempDeltaC" min="0" max="5" step="0.1" value="0.7" onchange="sendThresholdsFromUI()">
-                  <span class="settings-unit">°C</span>
-                </div>
-                <div class="settings-row w3-small">
-                  <label for="thrSettleSec">Settle</label>
-                  <input type="number" id="thrSettleSec" min="10" max="300" step="5" value="60" onchange="sendThresholdsFromUI()">
-                  <span class="settings-unit">s</span>
-                </div>
-                <div class="settings-row w3-small">
-                  <label for="thrEdgeHighDelta">Edge ΔP</label>
-                  <input type="number" id="thrEdgeHighDelta" min="5" max="40" step="1" value="15" onchange="sendThresholdsFromUI()">
-                  <span class="settings-unit">mmHg</span>
-                </div>
-                <div class="settings-row w3-small">
-                  <label for="thrSitCenterDelta">Center ΔP</label>
-                  <input type="number" id="thrSitCenterDelta" min="5" max="40" step="1" value="15" onchange="sendThresholdsFromUI()">
-                  <span class="settings-unit">mmHg</span>
-                </div>
-                <div class="settings-row w3-small">
-                  <label for="thrFewCountMax">Few max</label>
-                  <input type="number" id="thrFewCountMax" min="1" max="10" step="1" value="6" onchange="sendThresholdsFromUI()">
-                  <span class="settings-unit"></span>
-                </div>
-                <button class="animatedButton w3-small" style="margin-top:8px; padding:6px 12px" onclick="requestThresholds()">Request Thresholds</button>
-              </div>
-              <div class="settings-col"></div>
-              <div class="settings-col"></div>
-            </div>
-          </div>
-        </div>
         <div id="backgroundContainer" class="backgroundContainer">
           <img src="asset/bg_200x120.jpg" alt="background image" style="width:100%; height:auto" class="my-background-image">
           <!-- Select Mode -->

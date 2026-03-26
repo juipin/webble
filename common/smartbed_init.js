@@ -25,6 +25,7 @@
     hide("allbedsContainer");
     hide("userInformationContainer");
     hide("smartbedControlContainer");
+    hide("extraSettingsContainer");
 
     showV("lblPressurePump");
     showV("lblPressureMainA");

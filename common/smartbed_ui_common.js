@@ -218,6 +218,7 @@
       allbeds: hasAllBeds ? byId(allbedsContainerId) : null,
       userInfo: byId("userInformationContainer"),
       smartbedControl: byId("smartbedControlContainer"),
+      extraSettings: byId("extraSettingsContainer"),
     };
     api._ctx = { containers, nav: { connectButtonId, hasAllBeds, allbedsButtonId } };
 
@@ -301,6 +302,7 @@
 
       setDisplay(containers.userInfo, "none");
       setDisplay(containers.smartbedControl, "none");
+      setDisplay(containers.extraSettings, "none");
 
       if (clicked === connectButtonId) {
         stopPvsTimer();

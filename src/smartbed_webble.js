@@ -260,6 +260,7 @@ const backgroundContainer = document.getElementById("backgroundContainer");
 const airmattressContainer = document.getElementById("airmattressContainer");
 const pressuremapContainer = document.getElementById("pressuremapContainer");
 const settingContainer = document.getElementById("settingContainer");
+const extraSettingsContainer = document.getElementById("extraSettingsContainer");
 const userInformationContainer = document.getElementById("userInformationContainer");
 const smartbedControlContainer = document.getElementById("smartbedControlContainer");
 // Summary Views
