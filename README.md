@@ -127,3 +127,20 @@ Use these conventions to avoid breaking references when you move files:
   - Does not attempt to parse partial frames, avoiding truncated `#ALLX` updates.
 - Pressure map packets `#PSMAP##` / `#PZMAP##` are handled as binary after an 8‑byte header; the column-start byte and 120 payload bytes are extracted per package.
 - On connect, initial requests are serialized with gaps: `#RALLX → #RALL → #RSETX → #RSETS`, preventing “GATT operation already in progress”.
+
+## Command decoding details (adopted)
+
+- PRS
+  - Header: `#PRS`
+  - Parse rule: check `rx_data.substring(0, 4) == "#PRS"` and decode payload from `substring(4)`.
+  - Payload mapping (20 triplets): Duration P1..P4, Back angles P1..P4, Leg angles P1..P4, Turn angles P1..P4, Step angle, Duration In Turn Position, Duration In Flat Position, Duration Alternating.
+  - UI update: populate inputs and call `updatePressureReleaseSettingToDisplay()`.
+- ALLX
+  - UI sends ALL (28) + SETX (22) + Name (length + chars) in one frame.
+  - Device acknowledges with `#ACKX` when receiving from UI; on reconnect, the device may send `#ALLX` without an ACK.
+- REMS / RREMS
+  - UI sends reminders as length + chars encoded in triplets.
+  - Device stores reminders and returns encoded text on `#RREMS`.
+- Alternating / Redistribute
+  - Alternating inflates both non‑relief channels in a single operation, reduces sequence length.
+  - Redistribute deflates shared‑channel top cells by channel when 2+ top cells are in the same channel, then inflates non‑top cells.

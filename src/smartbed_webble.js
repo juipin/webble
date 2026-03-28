@@ -260,6 +260,8 @@ const backgroundContainer = document.getElementById("backgroundContainer");
 const airmattressContainer = document.getElementById("airmattressContainer");
 const pressuremapContainer = document.getElementById("pressuremapContainer");
 const settingContainer = document.getElementById("settingContainer");
+const allbedsContainer = document.getElementById("allbedsContainer");
+const bedContainer = document.getElementById("bedContainer");
 const extraSettingsContainer = document.getElementById("extraSettingsContainer");
 const userInformationContainer = document.getElementById("userInformationContainer");
 const smartbedControlContainer = document.getElementById("smartbedControlContainer");
@@ -842,8 +844,8 @@ function processReceivedString(rx_data) {
       else if (rx_data.substring(0, 5) == "#ALL ") {
         loadALLData(rx_data.substring(5, rx_data.length));
       }
-      else if (rx_data.substring(0, 5) == "#PRS") {
-        loadPRSData(rx_data.substring(5, rx_data.length));
+      else if (rx_data.substring(0, 4) == "#PRS") {
+        loadPRSData(rx_data.substring(4, rx_data.length));
       }
       else if (rx_data.substring(0, 5) == "#BODY") {
         updateAndSaveBodyData(rx_data.substring(5, rx_data.length));
@@ -1146,9 +1148,9 @@ function loadPRSData(receivedString) {
   iDurationP3 = data[2];
   iDurationP4 = data[3];
   iBackAngleP1 = data[4];
-  iBackAgleP2 = data[5];
-  iBackAgleP3 = data[6];
-  iBackAgleP4 = data[7];
+  iBackAngleP2 = data[5];
+  iBackAngleP3 = data[6];
+  iBackAngleP4 = data[7];
   iLegAngleP1 = data[8];
   iLegAngleP2 = data[9];
   iLegAngleP3 = data[10];
@@ -1162,7 +1164,29 @@ function loadPRSData(receivedString) {
   iDurationInFlatPosition = data[18];
   iDurationAlternating = data[19];
 
-  // Show PRS information on the PRS screen
+  // Update PRS page controls
+  const setVal = (id,val)=>{ const el=document.getElementById(id); if (el) el.value = String(val); };
+  setVal("taDurationP1", iDurationP1);
+  setVal("taDurationP2", iDurationP2);
+  setVal("taDurationP3", iDurationP3);
+  setVal("taDurationP4", iDurationP4);
+  setVal("taBackAngleP1", iBackAngleP1);
+  setVal("taBackAngleP2", iBackAngleP2);
+  setVal("taBackAngleP3", iBackAngleP3);
+  setVal("taBackAngleP4", iBackAngleP4);
+  setVal("taLegAngleP1", iLegAngleP1);
+  setVal("taLegAngleP2", iLegAngleP2);
+  setVal("taLegAngleP3", iLegAngleP3);
+  setVal("taLegAngleP4", iLegAngleP4);
+  setVal("taTurnAngleP1", iTurnAngleP1);
+  setVal("taTurnAngleP2", iTurnAngleP2);
+  setVal("taTurnAngleP3", iTurnAngleP3);
+  setVal("taTurnAngleP4", iTurnAngleP4);
+  setVal("taStepAngle", iStepAngle);
+  setVal("taDurationInTurnPosition", iDurationInTurnPosition);
+  setVal("taDurationInFlatPosition", iDurationInFlatPosition);
+  setVal("taDurationAlternating", iDurationAlternating);
+  if (typeof updatePressureReleaseSettingToDisplay === "function") updatePressureReleaseSettingToDisplay();
 }
 
 function loadSETSData(receivedString) {
@@ -1758,6 +1782,7 @@ function showExtraSettings() {
   if (setting) setting.style.display = "none";
   if (bg) bg.style.display = "none";
   if (extra) extra.style.display = "block";
+  writeOnCharacteristic("#RTHRS");
 }
 
 function returnFromExtraSettings() {
@@ -1771,6 +1796,7 @@ function returnFromExtraSettings() {
 
 function setSmartbedControl() {
   if (window.SmartbedUICommon) window.SmartbedUICommon.showSmartbedControl();
+  writeOnCharacteristic("#RPRS");
 }
 
 function setSaveUserInfoAndReturn() {
@@ -1816,6 +1842,12 @@ function executeSendAllX() {
     s += get3DigitString(nameStr.charCodeAt(i));
   }
 
+  // Debounce duplicate #ALLX within a short window to avoid double-send
+  if (window.__lastAllx && window.__lastAllx.msg === s && (Date.now() - window.__lastAllx.at) < 1200) {
+    console.log("Skipped duplicate #ALLX within debounce window");
+  } else {
+    window.__lastAllx = { msg: s, at: Date.now() };
+  }
   // Send #ALLX then (if non-empty) #REMS sequentially to avoid BLE write overlap
   writeOnCharacteristic(s).then(() => {
     const remEl = document.getElementById("taReminders");
@@ -2030,31 +2062,33 @@ function updatePressureReleaseSettingToDisplay() {
       shear: valueShear,
       mobility: valueMobility,
     });
-    return;
+    // Continue to update DOM directly to ensure BLE GUI page reflects values
   }
 
-  document.getElementById("taDurationP1").value = String(iDurationP1);
-  document.getElementById("taDurationP2").value = String(iDurationP2);
-  document.getElementById("taDurationP3").value = String(iDurationP3);
-  document.getElementById("taDurationP4").value = String(iDurationP4);
-  document.getElementById("taBackAngleP1").value = String(iBackAngleP1);
-  document.getElementById("taBackAngleP2").value = String(iBackAngleP2);
-  document.getElementById("taBackAngleP3").value = String(iBackAngleP3);
-  document.getElementById("taBackAngleP4").value = String(iBackAngleP4);
-  document.getElementById("taLegAngleP1").value = String(iLegAngleP1);
-  document.getElementById("taLegAngleP2").value = String(iLegAngleP2);
-  document.getElementById("taLegAngleP3").value = String(iLegAngleP3);
-  document.getElementById("taLegAngleP4").value = String(iLegAngleP4);
-  document.getElementById("taTurnAngleP1").value = String(iTurnAngleP1);
-  document.getElementById("taTurnAngleP2").value = String(iTurnAngleP2);
-  document.getElementById("taTurnAngleP3").value = String(iTurnAngleP3);
-  document.getElementById("taTurnAngleP4").value = String(iTurnAngleP4);
-  document.getElementById("taDurationInTurnPosition").value = String(iDurationInTurnPosition);
-  document.getElementById("taDurationInFlatPosition").value = String(iDurationInFlatPosition);
-  document.getElementById("taDurationAlternating").value = String(iDurationAlternating);
-  document.getElementById("lblBradenScorePRS").textContent = String(iBradenScore);
-  document.getElementById("lblShear").textContent = String(valueShear);
-  document.getElementById("lblMobility").textContent = String(valueMobility);
+  const setVal = (id,val)=>{ const el=document.getElementById(id); if (el) el.value = String(val); };
+  setVal("taDurationP1", iDurationP1);
+  setVal("taDurationP2", iDurationP2);
+  setVal("taDurationP3", iDurationP3);
+  setVal("taDurationP4", iDurationP4);
+  setVal("taBackAngleP1", iBackAngleP1);
+  setVal("taBackAngleP2", iBackAngleP2);
+  setVal("taBackAngleP3", iBackAngleP3);
+  setVal("taBackAngleP4", iBackAngleP4);
+  setVal("taLegAngleP1", iLegAngleP1);
+  setVal("taLegAngleP2", iLegAngleP2);
+  setVal("taLegAngleP3", iLegAngleP3);
+  setVal("taLegAngleP4", iLegAngleP4);
+  setVal("taTurnAngleP1", iTurnAngleP1);
+  setVal("taTurnAngleP2", iTurnAngleP2);
+  setVal("taTurnAngleP3", iTurnAngleP3);
+  setVal("taTurnAngleP4", iTurnAngleP4);
+  setVal("taDurationInTurnPosition", iDurationInTurnPosition);
+  setVal("taDurationInFlatPosition", iDurationInFlatPosition);
+  setVal("taDurationAlternating", iDurationAlternating);
+  const setText = (id,val)=>{ const el=document.getElementById(id); if (el) el.textContent = String(val); };
+  setText("lblBradenScorePRS", iBradenScore);
+  setText("lblShear", valueShear);
+  setText("lblMobility", valueMobility);
 }
 
 function updatePressureReleaseSettingFromDisplay() {

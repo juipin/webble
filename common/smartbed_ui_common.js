@@ -113,7 +113,7 @@
     const ctx = ensureInit();
     if (!ctx) return;
     setDisplay(ctx.containers.background, "none");
-    setDisplay(ctx.containers.setting, "none");
+    setDisplay(ctx.containers.bed, "none");
     setDisplay(ctx.containers.smartbedControl, "block");
   };
 

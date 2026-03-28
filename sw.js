@@ -1,4 +1,4 @@
-const CACHE_NAME = "smartbed-webble-v3";
+const CACHE_NAME = "smartbed-webble-v4";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -35,6 +35,19 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+
+  // Always fetch scripts from network to ensure latest UI logic
+  if (req.destination === "script") {
+    event.respondWith(fetch(req).catch(async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(req);
+      return cached || Response.error();
+    }));
+    return;
+  }
+
+  // Ignore extension requests which cannot be cached
+  if (req.url.startsWith("chrome-extension://")) return;
 
   if (req.mode === "navigate") {
     event.respondWith(
