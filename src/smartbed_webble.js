@@ -285,7 +285,13 @@ const disconnectButton = document.getElementById('disconnectBleButton');
 const bleStateContainer = document.getElementById('bleState');
 const retrievedValue = document.getElementById('valueContainer');
 const latestValueSent = document.getElementById('valueSent');
-const timestampContainer = document.getElementById('timestamp');
+const timestampContainer = document.querySelector('.timestamp') || document.getElementById('timestamp');
+function setTimestampNow() {
+  const d = new Date();
+  const s = d.getHours() + ":" + ((d.getMinutes() < 10) ? "0" : "") + d.getMinutes();
+  const nodes = document.querySelectorAll('.timestamp');
+  nodes.forEach(n => { n.innerHTML = s; });
+}
 // Bed
 const btnLeftTurn = document.getElementById('btnLeftTurn');
 const btnRightTurn = document.getElementById('btnRightTurn');
@@ -314,7 +320,6 @@ const pressureMapCanvas = document.getElementById('pressureMapCanvas');
 const isAccumulatedPressure = document.getElementById('isAccumulatedPressure');
 let isAccumulatedPressureChecked = false;
 if (isAccumulatedPressure.checked) isAccumulatedPressureChecked = true;
-console.log("isAccumulatedPressureChecked", isAccumulatedPressureChecked);
 
 // Setting
 let lblStaticPressure = document.getElementById("lblStaticPressure");
@@ -498,8 +503,7 @@ function connectToDevice(){
     //   const decodedValue = new TextDecoder().decode(value);
     //   console.log("Decoded value: ", decodedValue);
     //   retrievedValue.innerHTML = decodedValue;
-      let d = new Date();
-      timestampContainer.innerHTML = d.getHours() + ":" + ((d.getMinutes() < 10) ? "0" : "") + d.getMinutes();
+      setTimestampNow();
     // }
 
     if (bleTransmitServer) {
@@ -610,8 +614,7 @@ function handleCharacteristicChange(event){
     const modeIdx = parseInt(modeStr || "0", 10);
     const minute = parseInt(minuteStr || "0", 10);
     retrievedValue.innerHTML = "#AIRM " + modeIdx + " " + minute;
-    let d2 = new Date();
-    timestampContainer.innerHTML = d2.getHours() + ":" + d2.getMinutes();
+    setTimestampNow();
     if (modeSelect && modeIdx >= 0 && modeIdx < modeSelect.options.length) {
       modeSelect.selectedIndex = modeIdx;
       executionMode = modeIdx;
@@ -640,8 +643,7 @@ function handleCharacteristicChange(event){
       if (nextHash === -1) break;
       const frame = window.__bleRxBuffer.substring(0, nextHash);
       retrievedValue.innerHTML = frame;
-      const d3 = new Date();
-      timestampContainer.innerHTML = d3.getHours() + ":" + d3.getMinutes();
+      setTimestampNow();
       processReceivedString(frame);
       window.__bleRxBuffer = window.__bleRxBuffer.substring(nextHash);
     }
@@ -650,8 +652,7 @@ function handleCharacteristicChange(event){
     window.__asciiFlushTimer = setTimeout(() => {
       if (window.__bleRxBuffer && window.__bleRxBuffer.startsWith("#")) {
         retrievedValue.innerHTML = window.__bleRxBuffer;
-        const d4 = new Date();
-        timestampContainer.innerHTML = d4.getHours() + ":" + d4.getMinutes();
+        setTimestampNow();
         console.log("window.__bleRxBuffer: ", window.__bleRxBuffer);
         processReceivedString(window.__bleRxBuffer);
         window.__bleRxBuffer = "";
@@ -675,8 +676,7 @@ function writeOnCharacteristic(value){
       .then(() => {
         latestValueSent.innerHTML = value;
         console.log("Value written to transmit characteristic:", value);
-        let d = new Date();
-        timestampContainer.innerHTML = d.getHours() + ":" + d.getMinutes();
+        setTimestampNow();
         if (typeof value === "string" && value.startsWith("#AIRM00")) {
           const idx = parseInt(value.substring(7, 8), 10);
           if (!isNaN(idx) && modeSelect && idx >= 0 && idx < modeSelect.options.length) {
@@ -2188,8 +2188,7 @@ function get3DigitString(n) {
 }
 
 function getAndDisplayTime() {
-  let d = new Date();
-  timestampContainer.innerHTML = d.getHours() + ":" + ((d.getMinutes() < 10) ? "0" : "") + d.getMinutes();
+  setTimestampNow();
 }
 
 function getDateTime() {
