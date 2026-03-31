@@ -1635,22 +1635,54 @@ function loadAndExecuteMPR(receivedString) {
       data[i] = Number(receivedString.substring(i*3,(i+1)*3));
   }
 
-  var minute = data[0];
-  var nMsg = data[1];
-  nBigSpontaneousMovements = data[2];
-  nSmallSpontaneousMovements = data[3];
+  var minute = data[0] || 0;
+  var nMsg = data[1] || 0;
+  nBigSpontaneousMovements = data[2] || 0;
+  nSmallSpontaneousMovements = data[3] || 0;
 
-  // Update next pressure release action
-  // ********************** To Do ******************************************
-  // if (nMsg < 255) { // 255 will just update body movements and not pressure release message
-  //   if (nMsg == 0) lv_label_set_text(ui_lblNextPressureReleaseAction,"Pressure relief in");
-  //   else if (nMsg == 1) lv_label_set_text(ui_lblNextPressureReleaseAction,"Redistribute in");
-  //   else if (nMsg == 2) lv_label_set_text(ui_lblNextPressureReleaseAction,"Alternate in");
-  //   else if (nMsg == 3) lv_label_set_text(ui_lblNextPressureReleaseAction,"Auto turn in");
-  //   lv_label_set_text_fmt(ui_lblMinutePressureZoneUpdate, "%d", minute);
-  // }
-  // lv_label_set_text_fmt(ui_lblTurns, "%d", nBigSpontaneousMovements);
-  // lv_label_set_text_fmt(ui_lblShifts, "%d", nSmallSpontaneousMovements);
+  window.__MPR_STATE__ = { minute: minute, nMsg: nMsg, t0: Date.now() };
+
+  function fmtActionLabel(n) {
+    if (n === 1) return "Redistribute in";
+    if (n === 2) return "Alternating in";
+    if (n === 3) return "Auto turn in";
+    return "Pressure relief in";
+  }
+  function updateCountdown() {
+    const s = window.__MPR_STATE__;
+    if (!s) return;
+    const elapsedMin = Math.floor((Date.now() - s.t0) / 60000);
+    let remain = s.minute - elapsedMin;
+    if (remain < 0) remain = 0;
+    const modeSel = document.getElementById('modeSelect');
+    const lblAuto = document.getElementById('lblAutoTurn');
+    const lblTop = document.getElementById('pressureReleaseActionMsg');
+    if (modeSel && modeSel.value === "3") {
+      if (lblAuto) {
+        lblAuto.innerHTML = "Auto turn in " + String(remain) + " minutes";
+        lblAuto.style.visibility = 'visible';
+      }
+    } else if (modeSel && modeSel.value === "1") {
+      if (lblTop) {
+        lblTop.innerHTML = "Redistribute in " + String(remain) + " minutes";
+        lblTop.style.visibility = 'visible';
+      }
+    } else if (modeSel && modeSel.value === "2") {
+      if (lblTop) {
+        lblTop.innerHTML = "Alternating in " + String(remain) + " minutes";
+        lblTop.style.visibility = 'visible';
+      }
+    } else {
+      if (lblTop) {
+        lblTop.innerHTML = fmtActionLabel(s.nMsg) + " " + String(remain) + " minutes";
+        lblTop.style.visibility = 'visible';
+      }
+    }
+  }
+  if (!window.__MPR_TICK__) {
+    window.__MPR_TICK__ = setInterval(updateCountdown, 30000);
+  }
+  updateCountdown();
 
 }
 
