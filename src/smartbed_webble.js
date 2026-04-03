@@ -1133,6 +1133,24 @@ function loadAndShowPVSData(receivedString) {
   panelC5.style.backgroundColor = channelColour[CCellColourCode[4]];
   panelC6.style.backgroundColor = channelColour[CCellColourCode[5]];
   panelC7.style.backgroundColor = channelColour[CCellColourCode[5]];
+
+  // Optional: 6 Temp and 6 RH sensors after cell colours
+  if (dataLength >= 50) {
+    const tStart = 38, hStart = 44;
+    const setText = (id, txt) => { const el=document.getElementById(id); if (el) el.textContent = txt; };
+    setText("lblTemp1", "T1: " + data[tStart + 0] + "°C");
+    setText("lblTemp2", "T2: " + data[tStart + 1] + "°C");
+    setText("lblTemp3", "T3: " + data[tStart + 2] + "°C");
+    setText("lblTemp4", "T4: " + data[tStart + 3] + "°C");
+    setText("lblTemp5", "T5: " + data[tStart + 4] + "°C");
+    setText("lblTemp6", "T6: " + data[tStart + 5] + "°C");
+    setText("lblRh1", "RH1: " + data[hStart + 0] + "%");
+    setText("lblRh2", "RH2: " + data[hStart + 1] + "%");
+    setText("lblRh3", "RH3: " + data[hStart + 2] + "%");
+    setText("lblRh4", "RH4: " + data[hStart + 3] + "%");
+    setText("lblRh5", "RH5: " + data[hStart + 4] + "%");
+    setText("lblRh6", "RH6: " + data[hStart + 5] + "%");
+  }
 }
 
 function loadPRSData(receivedString) {
@@ -1892,10 +1910,9 @@ function executeSendAllX() {
       for (let i = 0; i < remStr.length; i++) {
         r += get3DigitString(remStr.charCodeAt(i));
       }
-      // slight delay to ensure previous write settles
-      setTimeout(() => writeOnCharacteristic(r), 500);
+      return writeOnCharacteristic(r);
     }
-  });
+  }).catch(()=>{});
 }
 
 function executeSendAll() {

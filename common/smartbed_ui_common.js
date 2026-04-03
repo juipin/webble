@@ -123,6 +123,10 @@
     setDisplay(ctx.containers.background, "block");
     setDisplay(ctx.containers.setting, "block");
     setDisplay(ctx.containers.userInfo, "none");
+    try {
+      const msg = document.getElementById("pressureReleaseActionMsg");
+      if (msg) msg.style.visibility = "hidden";
+    } catch (_) {}
   };
 
   api.returnFromSmartbedControl = function () {
@@ -131,6 +135,10 @@
     setDisplay(ctx.containers.background, "block");
     setDisplay(ctx.containers.bed, "block");
     setDisplay(ctx.containers.smartbedControl, "none");
+    try {
+      const msg = document.getElementById("pressureReleaseActionMsg");
+      if (msg) msg.style.visibility = "visible";
+    } catch (_) {}
   };
 
   api.setPrsFields = function (fields) {
