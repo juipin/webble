@@ -314,6 +314,11 @@ button {
 
 }
 
+.panelAirCell {
+    position: absolute;
+    z-index: 1000;
+}
+
 .sex {
     position: absolute;
     width: auto;

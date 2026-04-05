@@ -411,7 +411,7 @@ if ('ontouchstart' in window) {
 }
 
 // Air Mattress
-const channelColour = ['#FFA500', '#00FF00', '#FFFFFF', '#FFA500'];
+const channelColour = ['#FFFFFF', '#00FF00', '#FFA500'];
 var ACellColourCode = [];
 var BCellColourCode = [];
 var CCellColourCode = [];
@@ -639,7 +639,7 @@ function handleCharacteristicChange(event){
   if (window.__bleRxBuffer.startsWith("#")) {
     // Split by header boundaries and process complete frames
     while (true) {
-      const nextHash = window.__bleRxBuffer.indexOf("#", 1);
+      const nextHash = window.__bleRxBuffer.indexOf("#", 8);
       if (nextHash === -1) break;
       const frame = window.__bleRxBuffer.substring(0, nextHash);
       retrievedValue.innerHTML = frame;
@@ -796,10 +796,11 @@ function processReceivedString(rx_data) {
       else if (rx_data.substring(0, 8) == "#MPZ####") {
         
       }
-      else if (rx_data.substring(0, 8) == "#P&VS###") {
+      else if (rx_data.startsWith("#P&VS###") || rx_data.startsWith("#P&VS")) {
         container = document.getElementById("airmattressContainer");
-        if (container.style.display == "block") {          
-          loadAndShowPVSData(rx_data.substring(8, rx_data.length));
+        if (container.style.display == "block") {
+          const payload = rx_data.startsWith("#P&VS###") ? rx_data.substring(8) : rx_data.substring(6);
+          loadAndShowPVSData(payload);
         }
       }
       else if (rx_data.substring(0, 8) == "#AIRM###") {
@@ -1095,21 +1096,17 @@ function loadAndShowPVSData(receivedString) {
 
   panelMainA.style.backgroundColor = channelColour[data[0]];
   panelMainB.style.backgroundColor = channelColour[data[1]];
-  panelMainC.style.backgroundColor = channelColour[data[2]];    
+  panelMainC.style.backgroundColor = channelColour[data[2]];
   if (data[3] == 0) imgExhaustBlocked.style.visibility = 'visible'; else imgExhaustBlocked.style.visibility = 'hidden';
   if (data[4] == 0) {panelPump.style.backgroundColor = "#FFFFFF"; panelPump1.style.backgroundColor = "#FFFFFF";}
   else {panelPump.style.backgroundColor = "#00FF00"; panelPump1.style.backgroundColor = "#00FF00";}
   lblPressurePump.innerHTML = data[5];
-  lblPressureMainA.innerHTML = data[6];
-  lblPressureMainB.innerHTML = data[7];
-  lblPressureMainC.innerHTML = data[8];
-  lblPressurePillow.innerHTML = data[9];
 
   for (let i = 0; i < 7; i++) {
-    ACellColourCode[i] = data[10 + i];
-    BCellColourCode[i] = data[17 + i];
-    CCellColourCode[i] = data[24 + i];
-    DCellColourCode[i] = data[31 + i];
+    ACellColourCode[i] = data[6 + i];
+    BCellColourCode[i] = data[13 + i];
+    CCellColourCode[i] = data[20 + i];
+    DCellColourCode[i] = data[27 + i];
   }
   // Show channel/cell colour
   panelA1.style.backgroundColor = channelColour[ACellColourCode[0]];
@@ -1118,38 +1115,78 @@ function loadAndShowPVSData(receivedString) {
   panelA4.style.backgroundColor = channelColour[ACellColourCode[3]];
   panelA5.style.backgroundColor = channelColour[ACellColourCode[4]];
   panelA6.style.backgroundColor = channelColour[ACellColourCode[5]];
-  panelA7.style.backgroundColor = channelColour[ACellColourCode[5]];
+  panelA7.style.backgroundColor = channelColour[ACellColourCode[6]];
   panelB1.style.backgroundColor = channelColour[BCellColourCode[0]];
   panelB2.style.backgroundColor = channelColour[BCellColourCode[1]];
   panelB3.style.backgroundColor = channelColour[BCellColourCode[2]];
   panelB4.style.backgroundColor = channelColour[BCellColourCode[3]];
   panelB5.style.backgroundColor = channelColour[BCellColourCode[4]];
   panelB6.style.backgroundColor = channelColour[BCellColourCode[5]];
-  panelB7.style.backgroundColor = channelColour[BCellColourCode[5]];
+  panelB7.style.backgroundColor = channelColour[BCellColourCode[6]];
   panelC1.style.backgroundColor = channelColour[CCellColourCode[0]];
   panelC2.style.backgroundColor = channelColour[CCellColourCode[1]];
   panelC3.style.backgroundColor = channelColour[CCellColourCode[2]];
   panelC4.style.backgroundColor = channelColour[CCellColourCode[3]];
   panelC5.style.backgroundColor = channelColour[CCellColourCode[4]];
   panelC6.style.backgroundColor = channelColour[CCellColourCode[5]];
-  panelC7.style.backgroundColor = channelColour[CCellColourCode[5]];
+  panelC7.style.backgroundColor = channelColour[CCellColourCode[6]];
 
   // Optional: 6 Temp and 6 RH sensors after cell colours
-  if (dataLength >= 50) {
-    const tStart = 38, hStart = 44;
-    const setText = (id, txt) => { const el=document.getElementById(id); if (el) el.textContent = txt; };
-    setText("lblTemp1", "T1: " + data[tStart + 0] + "°C");
-    setText("lblTemp2", "T2: " + data[tStart + 1] + "°C");
-    setText("lblTemp3", "T3: " + data[tStart + 2] + "°C");
-    setText("lblTemp4", "T4: " + data[tStart + 3] + "°C");
-    setText("lblTemp5", "T5: " + data[tStart + 4] + "°C");
-    setText("lblTemp6", "T6: " + data[tStart + 5] + "°C");
-    setText("lblRh1", "RH1: " + data[hStart + 0] + "%");
-    setText("lblRh2", "RH2: " + data[hStart + 1] + "%");
-    setText("lblRh3", "RH3: " + data[hStart + 2] + "%");
-    setText("lblRh4", "RH4: " + data[hStart + 3] + "%");
-    setText("lblRh5", "RH5: " + data[hStart + 4] + "%");
-    setText("lblRh6", "RH6: " + data[hStart + 5] + "%");
+  if (dataLength >= 51) {
+    const tStart = 34, hStart = 40;
+    const setTxt = (id, text) => { const el=document.getElementById(id); if (el) el.textContent = text; return el; };
+    const temps = [];
+    const rhs = [];
+    for (let i=0;i<6;i++){ temps[i]=data[tStart+i]; rhs[i]=data[hStart+i]; }
+    setTxt("lblTemp1", "HOT: " + temps[0] + "°C");
+    setTxt("lblTemp2", "COLD: " + temps[1] + "°C");
+    setTxt("lblTemp3", "ROOM: " + temps[2] + "°C");
+    setTxt("lblTemp4", "T1: " + temps[3] + "°C");
+    setTxt("lblTemp5", "T2: " + temps[4] + "°C");
+    setTxt("lblTemp6", "T3: " + temps[5] + "°C");
+    setTxt("lblRh1", "RHT: " + rhs[0] + "%");
+    setTxt("lblRh2", "RHC: " + rhs[1] + "%");
+    setTxt("lblRh3", "RHR: " + rhs[2] + "%");
+    setTxt("lblRh4", "RH1: " + rhs[3] + "%");
+    setTxt("lblRh5", "RH2: " + rhs[4] + "%");
+    setTxt("lblRh6", "RH3: " + rhs[5] + "%");
+    const colTemp = (v)=> v>=MAX_MATTRESS_TEMP_C ? "#FFA500" : (v<=MIN_MATTRESS_TEMP_C ? "#66ccff" : "#FFFFFF");
+    const colRh = (v)=> v>=MAX_MATTRESS_RH ? "#FFA500" : "#FFFFFF";
+    const setCol=(id,c)=>{ const el=document.getElementById(id); if(el) el.style.color=c; };
+    setCol("lblTemp1", colTemp(temps[0]));
+    setCol("lblTemp2", colTemp(temps[1]));
+    setCol("lblTemp3", colTemp(temps[2]));
+    setCol("lblTemp4", colTemp(temps[3]));
+    setCol("lblTemp5", colTemp(temps[4]));
+    setCol("lblTemp6", colTemp(temps[5]));
+    setCol("lblRh1", colRh(rhs[0]));
+    setCol("lblRh2", colRh(rhs[1]));
+    setCol("lblRh3", colRh(rhs[2]));
+    setCol("lblRh4", colRh(rhs[3]));
+    setCol("lblRh5", colRh(rhs[4]));
+    setCol("lblRh6", colRh(rhs[5]));
+  }
+
+  // Optional: side bags and leg bag status colors + TEC/Blower states
+  if (dataLength >= 51) {
+    const bagColour = ["#FFFFFF", "#00cc66", "#CC8400"];
+    const scL = data[46], scR = data[47], scLeg = data[48];
+    const panel = (id, code, palette) => { const el=document.getElementById(id); if (el) el.style.backgroundColor = palette[code] || "#FFFFFF"; };
+    panel("panelLeft", scL, bagColour);
+    panel("panelRight", scR, bagColour);
+    panel("panelLeg", scLeg, bagColour);
+    const tec = document.getElementById("lblTec");
+    const blw = document.getElementById("lblBlower");
+    if (tec) { tec.textContent = (data[49] ? "TEC: ON" : "TEC: OFF"); tec.style.color = data[49] ? "#00cc66" : "#cccccc"; }
+    if (blw) { blw.textContent = (data[50] ? "BLW: ON" : "BLW: OFF"); blw.style.color = data[50] ? "#00cc66" : "#cccccc"; }
+  }
+  // Optional: per-cell pressures appended at the tail
+  if (dataLength >= 72) {
+    const setTxt = (id, text) => { const el=document.getElementById(id); if (el) el.textContent = text; };
+    const pAStart = 51, pBStart = 58, pCStart = 65;
+    for (let i=0;i<7;i++) setTxt("lblPressureA"+(i+1), String(data[pAStart+i]));
+    for (let i=0;i<7;i++) setTxt("lblPressureB"+(i+1), String(data[pBStart+i]));
+    for (let i=0;i<7;i++) setTxt("lblPressureC"+(i+1), String(data[pCStart+i]));
   }
 }
 
@@ -1904,7 +1941,7 @@ function executeSendAllX() {
     let remStr = remEl && typeof remEl.value === "string" ? remEl.value : "";
     if (remStr) remStr = remStr.trim();
     if (remStr.length > 0) {
-      if (remStr.length > 160) remStr = remStr.substring(0, 160);
+      if (remStr.length > 150) remStr = remStr.substring(0, 150);
       let r = "#REMS";
       r += get3DigitString(remStr.length);
       for (let i = 0; i < remStr.length; i++) {
@@ -1952,9 +1989,9 @@ function updateRemCounter() {
   const ctr = document.getElementById("remCounter");
   if (!el || !ctr) return;
   let v = el.value || "";
-  if (v.length > 160) v = v.substring(0, 160);
+  if (v.length > 150) v = v.substring(0, 150);
   if (v !== el.value) el.value = v;
-  ctr.textContent = v.length + "/160";
+  ctr.textContent = v.length + "/150";
 }
 
 function updateUserInfoFromDisplay() {

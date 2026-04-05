@@ -59,7 +59,7 @@
 
       <!-- BLE Connect -->
       <a name="bleconnect"> </a>
-      <div id="bleContainer" class="w3-container w3-dark-grey w3-center" style="padding:64px 16px 64px 16px">
+      <div id="bleContainer" class="w3-container w3-dark-grey w3-center" style="padding:40px 16px 40px 16px">
         <h1 class="w3-margin w3-xxlarge">Smart Bed</h1>
         <p class="w3-xlarge">Companion App</p>
         <div class="card-grid">
@@ -117,8 +117,8 @@
           <input type="text" class="oneLineText" id="taAge" name="taAge" style="left:708px; top:60px; width:42px;" placeholder="65">
           <input type="text" class="oneLineText" id="taBodyWeight" name="taBodyWeight" style="left:92px; top:100px; width:67px;" placeholder="60" onchange="updateUserInfoFromDisplay()">
           <input type="text" class="oneLineText" id="taBodyHeight" name="taBodyHeight" style="left:320px; top:100px; width:67px;" placeholder="170" onchange="updateUserInfoFromDisplay()">
-          <textarea placeholder="Enter reminding notes here" id="taReminders" name="taReminders" rows="11" maxlength="160" oninput="if (typeof updateRemCounter==='function') updateRemCounter()" style="position:absolute; left:450px; top:200px; width:290px; padding: 4px 4px 4px 4px; color:white; background:transparent; border:none; outline:none"></textarea>
-          <span id="remCounter" style="position:absolute; left:450px; top:380px; color:#9ca3af; font-size:12px">0/160</span>
+          <textarea placeholder="Enter reminding notes here" id="taReminders" name="taReminders" rows="11" maxlength="150" oninput="if (typeof updateRemCounter==='function') updateRemCounter()" style="position:absolute; left:450px; top:200px; width:290px; padding: 4px 4px 4px 4px; color:white; background:transparent; border:none; outline:none"></textarea>
+          <span id="remCounter" style="position:absolute; left:450px; top:380px; color:#9ca3af; font-size:12px">0/150</span>
           
           <div class="sex">
             <div class="dropup2">
@@ -326,6 +326,7 @@
                 <option value="3">Autoturn</option>
                 <option value="4">Static</option>
                 <option value="5">Autofirm</option>
+                <option value="6">Manual</option>
             </select>
           </div>
           <button type="button" id="bedIcon" data-workflow="developer" class="icon bedButton2" onpointerdown="button_click(this.id)" oncontextmenu="return false"> <img src="asset/icon_snb_50x45.jpg" alt="bed icon" draggable="false"> </button>
@@ -386,12 +387,9 @@
               <p id="panelMainB" data-workflow="developer" class="panelAirCell" style="left:580px; top:197px; width:64px; height:57px"></p>
               <p id="panelMainC" data-workflow="developer" class="panelAirCell" style="left:580px; top:257px; width:64px; height:57px"></p>
               <p id="panelPump" data-workflow="developer" class="panelAirCell" style="left:570px; top:75px; width:140px; height:57px"></p>
-              <p id="panelPump1" data-workflow="developer" class="panelAirCell" style="left:683px; top:130px; width:28px; height:184px"></p>        
+              <p id="panelPump1" data-workflow="developer" class="panelAirCell" style="left:683px; top:130px; width:28px; height:186px"></p>        
               <p id="lblPressurePump" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:90px">32</p>
-              <p id="lblPressureMainA" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:154px">32</p>
-              <p id="lblPressureMainB" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:212px">32</p>
-              <p id="lblPressureMainC" data-workflow="developer" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:596px; top:274px">32</p>  
-              <p id="lblPressurePillow" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:523px; top:245px">32</p>
+              
               <p id="lblPressureA1" class="w3-small w3-text-black setVisibility" style="position:absolute; left:73px; top:231px">32</p>
               <p id="lblPressureB1" class="w3-small w3-text-black setVisibility" style="position:absolute; left:100px; top:231px">32</p>
               <p id="lblPressureC1" class="w3-small w3-text-black setVisibility" style="position:absolute; left:128px; top:231px">32</p>
@@ -413,9 +411,7 @@
               <p id="lblPressureA7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:125px; top:145px">32</p>
               <p id="lblPressureB7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:250px; top:145px">32</p>
               <p id="lblPressureC7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:145px">32</p>
-              <p id="lblPressureRight" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:165px">32</p>
-              <p id="lblPressureLeft" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:272px">32</p>
-              <p id="lblPressureLeg" class="w3-small w3-text-black setVisibility" style="position:absolute; left:164px; top:165px">32</p>
+              
               <p id="panelA1" class="panelAirCell" style="left:66px; top:175px; width:29px; height:100px"></p>
               <p id="panelB1" class="panelAirCell" style="left:95px; top:175px; width:29px; height:100px"></p>
               <p id="panelC1" class="panelAirCell" style="left:124px; top:175px; width:29px; height:100px"></p>
@@ -453,6 +449,8 @@
               <p id="lblRh4" class="w3-small w3-text-white" style="position:absolute; left:340px; top:350px">RH4: --%</p>
               <p id="lblRh5" class="w3-small w3-text-white" style="position:absolute; left:430px; top:350px">RH5: --%</p>
               <p id="lblRh6" class="w3-small w3-text-white" style="position:absolute; left:520px; top:350px">RH6: --%</p>
+              <p id="lblTec" class="w3-small w3-text-white" style="position:absolute; left:610px; top:330px">TEC: OFF</p>
+              <p id="lblBlower" class="w3-small w3-text-white" style="position:absolute; left:610px; top:350px">BLW: OFF</p>
             </div>
 
 
