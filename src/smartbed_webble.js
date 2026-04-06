@@ -292,6 +292,17 @@ function setTimestampNow() {
   const nodes = document.querySelectorAll('.timestamp');
   nodes.forEach(n => { n.innerHTML = s; });
 }
+function updatePressureBannerVisibility() {
+  const msg = document.getElementById('pressureReleaseActionMsg');
+  if (!msg) return;
+  const am = document.getElementById("airmattressContainer");
+  const pm = document.getElementById("pressuremapContainer");
+  const bed = document.getElementById("bedContainer");
+  const setting = document.getElementById("settingContainer");
+  const showOn = (el) => !!el && el.style.display === "block";
+  const visible = showOn(am) || showOn(pm) || showOn(bed);
+  msg.style.visibility = visible && msg.innerHTML ? 'visible' : 'hidden';
+}
 // Bed
 const btnLeftTurn = document.getElementById('btnLeftTurn');
 const btnRightTurn = document.getElementById('btnRightTurn');
@@ -645,19 +656,30 @@ function handleCharacteristicChange(event){
       retrievedValue.innerHTML = frame;
       setTimestampNow();
       processReceivedString(frame);
+      if (typeof updatePressureBannerVisibility === "function") updatePressureBannerVisibility();
       window.__bleRxBuffer = window.__bleRxBuffer.substring(nextHash);
     }
     // If we have a single frame without a trailing '#', defer processing until no new chunks arrive briefly
     if (window.__asciiFlushTimer) clearTimeout(window.__asciiFlushTimer);
-    window.__asciiFlushTimer = setTimeout(() => {
+    const remsFlush = () => {
       if (window.__bleRxBuffer && window.__bleRxBuffer.startsWith("#")) {
+        if (window.__bleRxBuffer.substring(0,5) === "#REMS") {
+          const lenStr = window.__bleRxBuffer.substring(5,8);
+          const len = Number(lenStr);
+          const need = 8 + (isFinite(len) ? (len * 3) : 0);
+          if (window.__bleRxBuffer.length < need) {
+            window.__asciiFlushTimer = setTimeout(remsFlush, 250);
+            return;
+          }
+        }
         retrievedValue.innerHTML = window.__bleRxBuffer;
         setTimestampNow();
         console.log("window.__bleRxBuffer: ", window.__bleRxBuffer);
         processReceivedString(window.__bleRxBuffer);
         window.__bleRxBuffer = "";
       }
-    }, 180);
+    };
+    window.__asciiFlushTimer = setTimeout(remsFlush, 180);
   } else {
     // Do not overwrite UI with escaped bytes; wait for a header
   }
@@ -730,7 +752,7 @@ function disconnectDevice() {
 
         })
         .catch(error => {
-            console.log("An error occurred:", error);
+            console.log("An error occurred:", error); 
         });
     } else {
       console.log("No characteristic found to disconnect.");
@@ -746,7 +768,14 @@ function runModeSelect() {
   executionMode = modeSelect.selectedIndex;
   executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
   var s = "#AIRM00" + executionMode;
-  writeOnCharacteristic(s);
+  writeOnCharacteristic(s).then(()=> {
+    const txt = String(executionModeText || "").toLowerCase();
+    if (txt.indexOf("manual") !== -1) {
+      return writeOnCharacteristic("*SETMAM");
+    } else {
+      return writeOnCharacteristic("*CLRMAM");
+    }
+  }).catch(()=>{});
   
 }
 
@@ -799,7 +828,7 @@ function processReceivedString(rx_data) {
       else if (rx_data.startsWith("#P&VS###") || rx_data.startsWith("#P&VS")) {
         container = document.getElementById("airmattressContainer");
         if (container.style.display == "block") {
-          const payload = rx_data.startsWith("#P&VS###") ? rx_data.substring(8) : rx_data.substring(6);
+          const payload = rx_data.startsWith("#P&VS###") ? rx_data.substring(8) : rx_data.substring(5);
           loadAndShowPVSData(payload);
         }
       }
@@ -819,15 +848,24 @@ function processReceivedString(rx_data) {
       }
       else if (rx_data.substring(0, 5) == "#REMS") {
         const len = Number(rx_data.substring(5,8));
-        let s = "";
-        for (let i = 0; i < len; i++) {
-          const code = Number(rx_data.substring(8 + i*3, 11 + i*3));
-          s += String.fromCharCode(code);
-        }
-        const elRem = document.getElementById("taReminders");
-        if (elRem) {
-          elRem.value = s;
-          if (typeof updateRemCounter === "function") updateRemCounter();
+        if (isFinite(len) && len >= 0) {
+          const needChars = 8 + len * 3;
+          if (rx_data.length >= needChars) {
+            let s = "";
+            for (let i = 0; i < len; i++) {
+              const code = Number(rx_data.substring(8 + i*3, 11 + i*3));
+              s += String.fromCharCode(code);
+            }
+            const elRem = document.getElementById("taReminders");
+            if (elRem) {
+              elRem.value = s;
+              if (typeof updateRemCounter === "function") updateRemCounter();
+              if (typeof showRemsToast === "function") showRemsToast("Saved");
+            }
+          } else {
+            // Incomplete; let buffer accumulate and process later
+            return;
+          }
         }
       }
       else if (rx_data.substring(0, 5) == "#THRS") {
@@ -1430,6 +1468,7 @@ function loadALLXData(receivedString) {
       else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
       else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minuteToNextMixedModeAction + " minutes";
       else pressureReleaseActionMsg.innerHTML = "";
+      updatePressureBannerVisibility();
     }
   }
   if (lblStaticPressure && rangeStaticPressure) {
@@ -1572,6 +1611,7 @@ function loadALLXDataBytes(payload) {
       else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
       else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minuteToNextMixedModeAction + " minutes";
       else pressureReleaseActionMsg.innerHTML = "";
+      updatePressureBannerVisibility();
     }
   }
   if (lblStaticPressure && rangeStaticPressure) {
@@ -1947,7 +1987,7 @@ function executeSendAllX() {
       for (let i = 0; i < remStr.length; i++) {
         r += get3DigitString(remStr.charCodeAt(i));
       }
-      return writeOnCharacteristic(r);
+      return writeOnCharacteristic(r).then(()=>{ showRemsToast("Saved"); });
     }
   }).catch(()=>{});
 }
@@ -1992,6 +2032,31 @@ function updateRemCounter() {
   if (v.length > 150) v = v.substring(0, 150);
   if (v !== el.value) el.value = v;
   ctr.textContent = v.length + "/150";
+}
+
+function showRemsToast(text) {
+  const elRem = document.getElementById("taReminders");
+  if (!elRem) return;
+  let toast = document.getElementById("remsToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "remsToast";
+    toast.style.position = "absolute";
+    toast.style.background = "rgba(0,0,0,0.8)";
+    toast.style.color = "white";
+    toast.style.padding = "4px 8px";
+    toast.style.borderRadius = "6px";
+    toast.style.fontSize = "12px";
+    toast.style.zIndex = "2000";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = text || "Saved";
+  const rect = elRem.getBoundingClientRect();
+  toast.style.left = (rect.right - 70) + "px";
+  toast.style.top = (rect.top - 28) + "px";
+  toast.style.display = "block";
+  if (window.__remsToastTimer) clearTimeout(window.__remsToastTimer);
+  window.__remsToastTimer = setTimeout(() => { toast.style.display = "none"; }, 1500);
 }
 
 function updateUserInfoFromDisplay() {
