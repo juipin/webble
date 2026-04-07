@@ -135,6 +135,26 @@ Use these conventions to avoid breaking references when you move files:
   - Parse rule: check `rx_data.substring(0, 4) == "#PRS"` and decode payload from `substring(4)`.
   - Payload mapping (20 triplets): Duration P1..P4, Back angles P1..P4, Leg angles P1..P4, Turn angles P1..P4, Step angle, Duration In Turn Position, Duration In Flat Position, Duration Alternating.
   - UI update: populate inputs and call `updatePressureReleaseSettingToDisplay()`.
+- P&VS (Pump & Valves + Status)
+  - Request: `#RP&VS` is sent every 2s while the Air Mattress page is visible.
+  - Response headers: `#P&VS###` (Dongle/gateway) or `#P&VS` (direct from ACM); UI accepts both.
+  - Base payload (indices are 0-based triplets):
+    - [0..2] Channel states A,B,C → 0=idle(white), 1=inflating(green), 2=exhausting(orange)
+    - [3] Exhaust blocked flag → 0=blocked(show icon), 1=ok
+    - [4] Pump state → 0=OFF, 1=ON
+    - [5] Pump pressure (kPa or device unit displayed as-is)
+    - [6..12] A1..A7 cell states (same palette as channels)
+    - [13..19] B1..B7 cell states
+    - [20..26] C1..C7 cell states
+  - Optional extensions (the UI auto-detects by payload length):
+    - If length ≥ 51:
+      - Temps [34..39]: HOT, COLD, ROOM, T1, T2, T3 (°C)
+      - RHs [40..45]: RHT, RHC, RHR, RH1, RH2, RH3 (%)
+      - Side/Leg bags [46..48]: Left, Right, Leg → 0=idle(white), 1=active(green), 2=cooling/hold(orange)
+      - [49] TEC state → 0=OFF, 1=ON
+      - [50] Blower state → 0=OFF, 1=ON
+    - If length ≥ 72:
+      - Per‑cell pressures A1..A7 [51..57], B1..B7 [58..64], C1..C7 [65..71]
 - ALLX
   - UI sends ALL (28) + SETX (22) + Name (length + chars) in one frame.
   - Device acknowledges with `#ACKX` when receiving from UI; on reconnect, the device may send `#ALLX` without an ACK.
@@ -144,3 +164,16 @@ Use these conventions to avoid breaking references when you move files:
 - Alternating / Redistribute
   - Alternating inflates both non‑relief channels in a single operation, reduces sequence length.
   - Redistribute deflates shared‑channel top cells by channel when 2+ top cells are in the same channel, then inflates non‑top cells.
+
+## Preferences and settings payloads
+
+- SETS (11 triplets)
+  - [0]=mode, [1]=staticPressure, [2]=durationRedistribute, [3]=durationAlternating, [4]=autoTurnAngle,
+  - [5]=noTurn, [6]=noTurnRight, [7]=noTurnLeft, [8]=noMoveBack, [9]=noMoveLeg, [10]=reserved
+- SETX (≥ 20 triplets, versioned)
+  - [0]=version(1), [1]=noPillowMassage, [2]=noCooling, [3]=redistPlusAlter,
+  - [4]=AUTOTURN_INTERVAL, [5]=NUMBER_OF_TURNS, [6]=SIDEBAG_FILL_INTERVAL, [7]=LEG_AIRBAG_INTERVAL, [8]=POSTURE_CHECK_INTERVAL, [9]=HOLD_TIME_TO_COOL_VALVES,
+  - [10]=PRESSURE_FIRM, [11]=PRESSURE_SITTING, [12]=PRESSURE_RELEASED, [13]=PRESSURE_MAX, [14]=PRESSURE_HYSTERESIS
+- ALL (user/body snapshot, see `loadALLData`) and ALLX (combined settings + name) are parsed on connect and when requested.
+- UI preferences
+  - Workflow mode key: `localStorage["smartbed.workflowMode"]` → `"user"` or `"developer"`.

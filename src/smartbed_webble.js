@@ -66,7 +66,7 @@ let PRESSURE_FIRM = 42;
 let PRESSURE_SITTING = PRESSURE_FIRM + 10;
 let PRESSURE_RELEASED = 16;
 let PRESSURE_MAX = 80;
-let PRESSURE_HYSTERESIS = 4;
+let PRESSURE_HYSTERESIS = 1;
 
 let MIN_MATTRESS_TEMP_C = 25;
 let MAX_MATTRESS_TEMP_C = 30;
@@ -1755,24 +1755,21 @@ function loadAndExecuteMPR(receivedString) {
     if (modeSel && modeSel.value === "3") {
       if (lblAuto) {
         lblAuto.innerHTML = "Auto turn in " + String(remain) + " minutes";
-        lblAuto.style.visibility = 'visible';
       }
     } else if (modeSel && modeSel.value === "1") {
       if (lblTop) {
         lblTop.innerHTML = "Redistribute in " + String(remain) + " minutes";
-        lblTop.style.visibility = 'visible';
       }
     } else if (modeSel && modeSel.value === "2") {
       if (lblTop) {
         lblTop.innerHTML = "Alternating in " + String(remain) + " minutes";
-        lblTop.style.visibility = 'visible';
       }
     } else {
       if (lblTop) {
         lblTop.innerHTML = fmtActionLabel(s.nMsg) + " " + String(remain) + " minutes";
-        lblTop.style.visibility = 'visible';
       }
     }
+    if (typeof updatePressureBannerVisibility === "function") updatePressureBannerVisibility();
   }
   if (!window.__MPR_TICK__) {
     window.__MPR_TICK__ = setInterval(updateCountdown, 30000);
@@ -1838,7 +1835,7 @@ function saveSettings() {
   PRESSURE_SITTING = clampIntInRange(PRESSURE_SITTING, PRESSURE_FIRM, PRESSURE_FIRM + 20);
   PRESSURE_RELEASED = clampIntInRange(PRESSURE_RELEASED, 10, setStaticPressure);
   PRESSURE_MAX = clampIntInRange(PRESSURE_MAX, 60, 80);
-  PRESSURE_HYSTERESIS = clampIntInRange(PRESSURE_HYSTERESIS, 0, 8);
+  PRESSURE_HYSTERESIS = clampIntInRange(PRESSURE_HYSTERESIS, 0, 3);
 
   MIN_MATTRESS_TEMP_C = clampIntInRange(MIN_MATTRESS_TEMP_C, 22, 30);
   MAX_MATTRESS_TEMP_C = clampIntInRange(MAX_MATTRESS_TEMP_C, 25, 33);
@@ -2430,7 +2427,7 @@ function changeSliderSetting(setting) {
   else if (setting == "taPressureSitting") {PRESSURE_SITTING = clampIntInRange(v, PRESSURE_FIRM, PRESSURE_FIRM + 20); el.value = String(PRESSURE_SITTING);}
   else if (setting == "taPressureReleased") {PRESSURE_RELEASED = clampIntInRange(v, 10, setStaticPressure + 10); el.value = String(PRESSURE_RELEASED);}
   else if (setting == "taPressureMax") {PRESSURE_MAX = clampIntInRange(v, 60, 80); el.value = String(PRESSURE_MAX);}
-  else if (setting == "taPressureHysteresis") {PRESSURE_HYSTERESIS = clampIntInRange(v, 2, 8); el.value = String(PRESSURE_HYSTERESIS);}
+  else if (setting == "taPressureHysteresis") {PRESSURE_HYSTERESIS = clampIntInRange(v, 0, 3); el.value = String(PRESSURE_HYSTERESIS);}
   else if (setting == "taMinMattressTempC") {MIN_MATTRESS_TEMP_C = clampIntInRange(v, 22, 30); el.value = String(MIN_MATTRESS_TEMP_C);}
   else if (setting == "taMaxMattressTempC") {MAX_MATTRESS_TEMP_C = clampIntInRange(v, 25, 33); el.value = String(MAX_MATTRESS_TEMP_C);}
   else if (setting == "taMaxMattressRh") {MAX_MATTRESS_RH = clampIntInRange(v, 50, 95); el.value = String(MAX_MATTRESS_RH);}
