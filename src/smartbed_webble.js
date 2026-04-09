@@ -328,9 +328,8 @@ const imgRightTurn = document.getElementById('imgRightTurn');
 const maxProbabilityLabel = document.getElementById('maxProbabilityLabel');
 const maxProbability = document.getElementById('maxProbability');
 const pressureMapCanvas = document.getElementById('pressureMapCanvas');
-const isAccumulatedPressure = document.getElementById('isAccumulatedPressure');
-let isAccumulatedPressureChecked = false;
-if (isAccumulatedPressure.checked) isAccumulatedPressureChecked = true;
+const isPosturePressure = document.getElementById('isPosturePressure');
+let isPosturePressureChecked = !!(isPosturePressure && isPosturePressure.checked);
 
 // Setting
 let lblStaticPressure = document.getElementById("lblStaticPressure");
@@ -562,7 +561,7 @@ function onDisconnected(event){
 function handleCharacteristicChange(event){
   console.log("handleCharacteristicChange");
   const rawValue = event.target.value;
-  const bytes = new Uint8Array(rawValue.buffer, rawValue.byteOffset, rawValue.byteLength);
+  let bytes = new Uint8Array(rawValue.buffer, rawValue.byteOffset, rawValue.byteLength);
  
   // Byte-buffer accumulator (robust to binary payloads and MTU fragmentation)
   if (!window.__rxBytes) window.__rxBytes = new Uint8Array(0);
@@ -573,6 +572,7 @@ function handleCharacteristicChange(event){
     merged.set(window.__rxBytes);
     merged.set(bytes, window.__rxBytes.length);
     window.__rxBytes = merged;
+    console.log("window.__rxBytes: ", window.__rxBytes);
     if (window.__rxBytes.length > 8192) {
       window.__rxBytes = window.__rxBytes.slice(-4096);
     }
@@ -587,18 +587,19 @@ function handleCharacteristicChange(event){
   };
  
   // Drop leading garbage until '#'
-  const firstHashIdx = window.__rxBytes.indexOf(35); // '#'
+  const firstHashIdx = window.__rxBytes.indexOf(35);
   if (firstHashIdx > 0) {
     window.__rxBytes = window.__rxBytes.slice(firstHashIdx);
   }
  
   // 1) Pressure map packets (#PSMAP## / #PZMAP##) - binary payload follows 8-byte header
+  let processedBinary = false;
   while (window.__rxBytes.length >= 9) {
     const header8 = decodeAscii(window.__rxBytes, 0, 8);
     if (header8 === "#PSMAP##" || header8 === "#PZMAP##") {
       const need = 9 + pixelsPerPackage;
       if (window.__rxBytes.length < need) break;
-      const colStart = window.__rxBytes[8];
+      const colStart = window.__rxBytes[8] >>> 0;
       const packageNumber = Math.floor(colStart / 6);
       pixelCount = packageNumber * pixelsPerPackage;
       for (let i = 0; i < pixelsPerPackage; i++) {
@@ -607,82 +608,100 @@ function handleCharacteristicChange(event){
       }
       container = document.getElementById("pressuremapContainer");
       if (pixelCount >= 840 && container.style.display == "block") {
-        if (header8 === "#PSMAP##") drawPSColorMap();
-        else drawPZColorMap();
+        if (header8 === "#PSMAP##") { window.lastMapKind = "PS"; drawPSColorMap(); }
+        else { window.lastMapKind = "PZ"; drawPZColorMap(); }
       }
       window.__rxBytes = window.__rxBytes.slice(need);
+      processedBinary = true;
+      continue;
+    }
+    // If buffer doesn't start with '#', drop until next '#'
+    const hashIdx = window.__rxBytes.indexOf(35);
+    if (hashIdx > 0) {
+      window.__rxBytes = window.__rxBytes.slice(hashIdx);
       continue;
     }
     break;
   }
  
-  // Note: #ALLX and other commands over BLE are ASCII-encoded triplets from ACM; handled by ASCII router below.
- 
-  // 3) AIRM acknowledgement: "#AIRM###" + mode[3] + minute[3] (ASCII digits)
-  while (window.__rxBytes.length >= 14 && decodeAscii(window.__rxBytes, 0, 8) === "#AIRM###") {
-    const modeStr = decodeAscii(window.__rxBytes, 8, 3);
-    const minuteStr = decodeAscii(window.__rxBytes, 11, 3);
-    const modeIdx = parseInt(modeStr || "0", 10);
-    const minute = parseInt(minuteStr || "0", 10);
-    retrievedValue.innerHTML = "#AIRM " + modeIdx + " " + minute;
-    setTimestampNow();
-    if (modeSelect && modeIdx >= 0 && modeIdx < modeSelect.options.length) {
-      modeSelect.selectedIndex = modeIdx;
-      executionMode = modeIdx;
-      executionModeText = modeSelect.options[modeIdx].text;
-      pressureReleaseActionMsg.innerHTML = "";
-      pressureReleaseActionMsg.style.visibility = 'hidden';
+  // Parse ASCII frames directly from __rxBytes and slice them out
+  while (window.__rxBytes.length >= 5 && window.__rxBytes[0] === 35) {
+    if (window.__rxBytes.length >= 8) {
+      const h8 = decodeAscii(window.__rxBytes, 0, 8);
+      if ((h8 === "#PSMAP##" || h8 === "#PZMAP##") && window.__rxBytes.length < 9 + pixelsPerPackage) break;
+      if (h8 === "#AIRM###") {
+        if (window.__rxBytes.length < 14) break;
+        const frame = decodeAscii(window.__rxBytes, 0, 14);
+        retrievedValue.innerHTML = frame;
+        setTimestampNow();
+        processReceivedString(frame);
+        window.__rxBytes = window.__rxBytes.slice(14);
+        continue;
+      }
+      if (h8.startsWith("#REMS")) {
+        if (window.__rxBytes.length < 8) break;
+        const lenStr = decodeAscii(window.__rxBytes, 5, 3);
+        const len = Number(lenStr);
+        const need = 8 + (isFinite(len) ? len * 3 : 0);
+        if (window.__rxBytes.length < need) break;
+        const frame = decodeAscii(window.__rxBytes, 0, need);
+        retrievedValue.innerHTML = frame;
+        setTimestampNow();
+        processReceivedString(frame);
+        window.__rxBytes = window.__rxBytes.slice(need);
+        window.__gotREMS = true;
+        continue;
+      }
     }
-    window.__rxBytes = window.__rxBytes.slice(14);
-  }
- 
-  // 4) ASCII accumulator for other commands (chunked notifications)
-  if (typeof window.__bleRxBuffer !== "string") window.__bleRxBuffer = "";
-  let chunk = "";
-  for (let i = 0; i < bytes.length; i++) chunk += String.fromCharCode(bytes[i]);
-  window.__bleRxBuffer += chunk;
-  const firstHash = window.__bleRxBuffer.indexOf("#");
-  if (firstHash > 0) window.__bleRxBuffer = window.__bleRxBuffer.substring(firstHash);
-  if (window.__bleRxBuffer.length > 2048) {
-    window.__bleRxBuffer = window.__bleRxBuffer.slice(-1024);
-  }
-  // Process known ASCII-encoded frames via router
-  if (window.__bleRxBuffer.startsWith("#")) {
-    // Split by header boundaries and process complete frames
-    while (true) {
-      const nextHash = window.__bleRxBuffer.indexOf("#", 8);
-      if (nextHash === -1) break;
-      const frame = window.__bleRxBuffer.substring(0, nextHash);
+    // Exact-length gating for #PRS (20 triplets) to avoid waiting for the next '#'
+    const asciiHeader = decodeAscii(window.__rxBytes, 0, Math.min(8, window.__rxBytes.length));
+    if (asciiHeader.startsWith("#PRS")) {
+      const need = 4 + 20 * 3;
+      if (window.__rxBytes.length < need) break;
+      const frame = decodeAscii(window.__rxBytes, 0, need);
       retrievedValue.innerHTML = frame;
       setTimestampNow();
       processReceivedString(frame);
-      if (typeof updatePressureBannerVisibility === "function") updatePressureBannerVisibility();
-      window.__bleRxBuffer = window.__bleRxBuffer.substring(nextHash);
+      window.__rxBytes = window.__rxBytes.slice(need);
+      continue;
     }
-    // If we have a single frame without a trailing '#', defer processing until no new chunks arrive briefly
-    if (window.__asciiFlushTimer) clearTimeout(window.__asciiFlushTimer);
-    const remsFlush = () => {
-      if (window.__bleRxBuffer && window.__bleRxBuffer.startsWith("#")) {
-        if (window.__bleRxBuffer.substring(0,5) === "#REMS") {
-          const lenStr = window.__bleRxBuffer.substring(5,8);
-          const len = Number(lenStr);
-          const need = 8 + (isFinite(len) ? (len * 3) : 0);
-          if (window.__bleRxBuffer.length < need) {
-            window.__asciiFlushTimer = setTimeout(remsFlush, 250);
-            return;
+    if (asciiHeader.startsWith("#REMS")) {
+      if (window.__rxBytes.length >= 8) {
+        const lenStr = decodeAscii(window.__rxBytes, 5, 3);
+        const len = Number(lenStr);
+        if (isFinite(len) && len >= 0) {
+          const need = 8 + len * 3;
+          if (window.__rxBytes.length < need) break;
+          let digitsOk = true;
+          for (let i = 8; i < need; i++) {
+            const ch = window.__rxBytes[i];
+            if (ch < 48 || ch > 57) { digitsOk = false; break; }
           }
+          if (!digitsOk) {
+            const nextIdx = window.__rxBytes.indexOf(35, 1);
+            if (nextIdx === -1) break;
+            window.__rxBytes = window.__rxBytes.slice(nextIdx);
+            continue;
+          }
+          const frame = decodeAscii(window.__rxBytes, 0, need);
+          retrievedValue.innerHTML = frame;
+          setTimestampNow();
+          processReceivedString(frame);
+          window.__rxBytes = window.__rxBytes.slice(need);
+          window.__gotREMS = true;
+          continue;
         }
-        retrievedValue.innerHTML = window.__bleRxBuffer;
-        setTimestampNow();
-        console.log("window.__bleRxBuffer: ", window.__bleRxBuffer);
-        processReceivedString(window.__bleRxBuffer);
-        window.__bleRxBuffer = "";
       }
-    };
-    window.__asciiFlushTimer = setTimeout(remsFlush, 180);
-  } else {
-    // Do not overwrite UI with escaped bytes; wait for a header
+    }
+    const nextIdx = window.__rxBytes.indexOf(35, 1);
+    if (nextIdx === -1) break;
+    const frame = decodeAscii(window.__rxBytes, 0, nextIdx);
+    retrievedValue.innerHTML = frame;
+    setTimestampNow();
+    processReceivedString(frame);
+    window.__rxBytes = window.__rxBytes.slice(nextIdx);
   }
+  // Leave any residual bytes for next notification without aggressive truncation
 }
 
 function writeOnCharacteristic(value){
@@ -780,16 +799,16 @@ function runModeSelect() {
 }
 
 function runAccumulatedPressureSelect() {
-  if (bleStateContainer.innerHTML == "Device disconnected") {
-    if (isAccumulatedPressure.checked) {
-      isAccumulatedPressureChecked = true;
-      writeOnCharacteristic("#SCREEN4");
+  isPosturePressureChecked = !!(isPosturePressure && isPosturePressure.checked);
+  const container = document.getElementById("pressuremapContainer");
+  const visible = container && container.style.display === "block";
+  if (visible) {
+    const cmd = isPosturePressureChecked ? "#RPZMAP" : "#RPSMAP";
+    try { writeOnCharacteristic(cmd); } catch (_) {}
+    if (typeof window.lastMapKind === "string") {
+      if (window.lastMapKind === "PS") drawPSColorMap();
+      else if (window.lastMapKind === "PZ") drawPZColorMap();
     }
-    else {
-      isAccumulatedPressureChecked = false;
-      writeOnCharacteristic("#SCREEN3");
-    }
-    console.log("isAccumulatedPressureChecked:", isAccumulatedPressureChecked);
   }
 }
 
@@ -1032,7 +1051,9 @@ function loadColorMapData(receivedString) {
       imageGreyPixelArray[pixelCount + i] = psm_data.charCodeAt(i);;
     }
   }
-  console.log(imageGreyPixelArray);
+  if (pixelCount >= 840) {
+    console.log(imageGreyPixelArray);
+  }
 }
 
 function drawPSColorMap() {
@@ -1052,8 +1073,10 @@ function drawPSColorMap() {
   let pixels = imgData.data;
   // Replace rectangles (14x14 pixels) with force
   let force = 0.0;
+  const mode = (document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer" && window.renderMode) ? window.renderMode : "normal";
+  const src = (mode === "smooth") ? getSmoothedArray(imageGreyPixelArray) : imageGreyPixelArray;
   for (let i = 0; i < totalPixelCount; i++) {
-    force = imageGreyPixelArray[i]/255.00;
+    force = src[i]/255.00;
     console.log("force: ", force);
     if (force > 0) {
       g = (((6 - (2 * 0.8)) * force) + 0.8);
@@ -1061,7 +1084,7 @@ function drawPSColorMap() {
       green = Math.round((Math.max((4.0 - Math.abs(g - 2.0) - Math.abs(g - 4.0)) / 2.0, 0)) * 255);
       blue = Math.round((Math.max((3.0 - Math.abs(g - 1.0) - Math.abs(g - 2.0)) / 2.0, 0)) * 255);
       x = (Math.floor(i / numRows)) * pixelScaleX;
-      y = numRows * pixelScaleY - (i % numRows) * pixelScaleY;
+      y = (numRows - 1 - (i % numRows)) * pixelScaleY;
       // console.log("g: ", g);
       // console.log("red: ", red);
       // console.log("green: ", green);
@@ -1081,6 +1104,7 @@ function drawPSColorMap() {
   }
   // Put the pixel colours on the canvas
   ctx.putImageData(imgData, 0, 0);
+  drawOverlayBadge("PS", mode);
 }
 
 function drawPZColorMap() {
@@ -1100,15 +1124,17 @@ function drawPZColorMap() {
   let pixels = imgData.data;
   // Replace rectangles (14x14 pixels) with force
   let force = 0.0;
+  const mode = (document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer" && window.renderMode) ? window.renderMode : "normal";
+  const src = (mode === "smooth") ? getSmoothedArray(imageGreyPixelArray) : imageGreyPixelArray;
   for (let i = 0; i < totalPixelCount; i++) {
-    force = imageGreyPixelArray[i]/255.00;
+    force = src[i]/255.00;
     if (force > 0) {
       g = (((6 - (2 * 0.8)) * force) + 0.8);
       red = Math.round((Math.max((3.0 - Math.abs(g - 4.0) - Math.abs(g - 5.0)) / 2.0, 0)) * 255);
       green = Math.round((Math.max((4.0 - Math.abs(g - 2.0) - Math.abs(g - 4.0)) / 2.0, 0)) * 255);
       blue = Math.round((Math.max((3.0 - Math.abs(g - 1.0) - Math.abs(g - 2.0)) / 2.0, 0)) * 255);
       x = (Math.floor(i / numRows)) * pixelScaleX;
-      y = numRows * pixelScaleY - (i % numRows) * pixelScaleY;
+      y = (numRows - 1 - (i % numRows)) * pixelScaleY;
       for (let xx = x; xx < x+pixelScaleX; xx++) {
         for (let yy = y; yy < y+pixelScaleY; yy++) {
           var off = (yy * imgData.width + xx) * 4;
@@ -1122,6 +1148,53 @@ function drawPZColorMap() {
   }    
   // Put the pixel colours on the canvas
   ctx.putImageData(imgData, 0, 0);
+  drawOverlayBadge("PZ", mode);
+}
+
+function getSmoothedArray(src) {
+  const out = new Uint8Array(totalPixelCount);
+  const W = 48, H = 20;
+  const idx = (x,y)=> x*20 + y;
+  const clamp=(v,min,max)=> v<min?min:(v>max?max:v);
+  for (let x=0;x<W;x++) {
+    for (let y=0;y<H;y++) {
+      let sum=0, wsum=0;
+      for (let dx=-1;dx<=1;dx++) {
+        for (let dy=-1;dy<=1;dy++) {
+          const nx = clamp(x+dx,0,W-1);
+          const ny = clamp(y+dy,0,H-1);
+          const w = (dx===0 && dy===0) ? 4 : (Math.abs(dx)+Math.abs(dy)===1 ? 2 : 1);
+          sum += w * src[idx(nx,ny)];
+          wsum += w;
+        }
+      }
+      out[idx(x,y)] = Math.round(sum/wsum);
+    }
+  }
+  return out;
+}
+
+function drawOverlayBadge(kind, mode) {
+  if (!(document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer")) return;
+  const txt = kind + (mode==="smooth" ? "·SM" : "");
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(6,6,72,20);
+  ctx.fillStyle = "#fff";
+  ctx.font = "12px sans-serif";
+  ctx.fillText(txt, 10, 21);
+}
+
+if (typeof window.renderMode === "undefined") window.renderMode = "normal";
+const pressureMapCanvasEl = document.getElementById("pressureMapCanvas");
+if (pressureMapCanvasEl) {
+  pressureMapCanvasEl.addEventListener("click", () => {
+    if (!(document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer")) return;
+    window.renderMode = (window.renderMode === "normal") ? "smooth" : "normal";
+    if (typeof window.lastMapKind === "string") {
+      if (window.lastMapKind === "PS") drawPSColorMap();
+      else if (window.lastMapKind === "PZ") drawPZColorMap();
+    }
+  });
 }
 
 function loadAndShowPVSData(receivedString) {

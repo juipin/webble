@@ -275,6 +275,11 @@
       window.timerPVS = null;
     };
 
+    const stopPmapTimer = () => {
+      if (window.timerPMAP) clearInterval(window.timerPMAP);
+      window.timerPMAP = null;
+    };
+
     const startPvsTimer = () => {
       stopPvsTimer();
       window.timerPVS = setInterval(() => {
@@ -282,6 +287,31 @@
           send("#RP&VS");
         } catch (_) {}
       }, 2000);
+    };
+
+    const startPmapTimer = () => {
+      stopPmapTimer();
+      const chk = document.getElementById("isPosturePressure");
+      const useZ = !!(chk && chk.checked);
+      const frozen = !!(document.getElementById("isPmapFrozen") && document.getElementById("isPmapFrozen").checked);
+      if (!frozen) {
+        try { send(useZ ? "#RPZMAP" : "#RPSMAP"); } catch (_) {}
+      }
+      window.timerPMAP = setInterval(() => {
+        try {
+          const frozenNow = !!(document.getElementById("isPmapFrozen") && document.getElementById("isPmapFrozen").checked);
+          if (frozenNow) return;
+          const c = document.getElementById("isPosturePressure");
+          const z = !!(c && c.checked);
+          send(z ? "#RPZMAP" : "#RPSMAP");
+        } catch (_) {}
+      }, 10000);
+    };
+    
+    window.togglePmapFreeze = () => {
+      const frozen = !!(document.getElementById("isPmapFrozen") && document.getElementById("isPmapFrozen").checked);
+      if (frozen) stopPmapTimer();
+      else startPmapTimer();
     };
 
     const hideAllMainScreens = () => {
@@ -314,6 +344,7 @@
 
       if (clicked === connectButtonId) {
         stopPvsTimer();
+        stopPmapTimer();
         hideAllMainScreens();
         setDisplay(containers.connect, "block");
         setDisplay(containers.background, "none");
@@ -327,6 +358,7 @@
 
       if (hasAllBeds && clicked === allbedsButtonId) {
         stopPvsTimer();
+        stopPmapTimer();
         hideAllMainScreens();
         setDisplay(containers.allbeds, "block");
         setActiveTab(allbedsButtonId);
@@ -339,6 +371,7 @@
 
       if (clicked === "bedButton" || clicked === "bedIcon") {
         stopPvsTimer();
+        stopPmapTimer();
         hideAllMainScreens();
         setDisplay(containers.background, "block");
         setDisplay(containers.bed, "block");
@@ -370,6 +403,7 @@
           const msg = document.getElementById("pressureReleaseActionMsg");
           if (msg) msg.style.visibility = "visible";
         } catch (_) {}
+        stopPmapTimer();
         startPvsTimer();
         try {
           send("#SCREEN1");
@@ -379,6 +413,7 @@
 
       if (clicked === "pressuremapButton" || clicked === "pressuremapIcon") {
         stopPvsTimer();
+        stopPmapTimer();
         hideAllMainScreens();
         setDisplay(containers.background, "block");
         setDisplay(containers.pressuremap, "block");
@@ -398,15 +433,13 @@
           ctx.fillRect(0, 0, 672, 280);
         }
 
-        const useAccumulated = !!window.isAccumulatedPressureChecked;
-        try {
-          send(useAccumulated ? "#SCREEN4" : "#SCREEN3");
-        } catch (_) {}
+        startPmapTimer();
         return;
       }
 
       if (clicked === "settingButton" || clicked === "settingIcon") {
         stopPvsTimer();
+        stopPmapTimer();
         hideAllMainScreens();
         setDisplay(containers.background, "block");
         setDisplay(containers.setting, "block");

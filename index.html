@@ -459,13 +459,15 @@
             <div id="pressuremapContainer">
               <!-- Static -->
               <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Pressure Map</p>
-              <p class="w3-medium w3-left-align" style="position:absolute; left:550px; top:55px; color:orange">Accumulated Pressure</p>
+              <p class="w3-medium w3-left-align" style="position:absolute; left:510px; top:55px; color:orange">Posture</p>
+              <p class="w3-medium w3-left-align" style="position:absolute; left:655px; top:55px; color:orange">Freeze</p>
               <!-- Show -->              
               <p class="timestamp w3-medium w3-right-align" style="position:absolute; left:730px; top:12px">NaN</p>
               <p id="maxProbabilityLabel" class="w3-medium w3-left-align" style="position:absolute; left:200px; top:55px">Unknown</p>
               <p id="maxProbability" class="w3-medium w3-left-align" style="position:absolute; left:370px; top:55px">100%</p>
               <!-- Control -->
-              <label class="switch" style="position:absolute; left:475px; top:55px" onchange="runAccumulatedPressureSelect()"><input id="isAccumulatedPressure" type="checkbox"><span class="slider round"></span></label>
+              <label class="switch" style="position:absolute; left:450px; top:55px" onchange="runAccumulatedPressureSelect()"><input id="isPosturePressure" type="checkbox"><span class="slider round"></span></label>
+              <label class="switch" style="position:absolute; left:595px; top:55px" onchange="togglePmapFreeze()"><input id="isPmapFrozen" type="checkbox"><span class="slider round"></span></label>
               <canvas id="pressureMapCanvas" width="672" height="280" style="position:absolute; left:64px; top:84px; border:2px solid white"></canvas>
             </div>
             
