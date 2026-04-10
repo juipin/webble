@@ -441,7 +441,7 @@ const posture = [
   "Sleep on Left Edge",
   "Prone"
 ];
-const ctx = pressureMapCanvas.getContext("2d");
+const ctx = pressureMapCanvas.getContext("2d", { willReadFrequently: true });
 ctx.fillStyle = "grey";
 ctx.fillRect(0, 0, 672, 280);
 
@@ -628,7 +628,40 @@ function handleCharacteristicChange(event){
   while (window.__rxBytes.length >= 5 && window.__rxBytes[0] === 35) {
     if (window.__rxBytes.length >= 8) {
       const h8 = decodeAscii(window.__rxBytes, 0, 8);
-      if ((h8 === "#PSMAP##" || h8 === "#PZMAP##") && window.__rxBytes.length < 9 + pixelsPerPackage) break;
+      if (h8.startsWith("#MALLOW")) {
+        const hexReady = window.__rxBytes.length >= 11;
+        if (hexReady) {
+          const c7 = window.__rxBytes[7], c8 = window.__rxBytes[8], c9 = window.__rxBytes[9], c10 = window.__rxBytes[10];
+          const isHex = (x)=>(x>=48&&x<=57)||(x>=65&&x<=70)||(x>=97&&x<=102);
+          if (isHex(c7)&&isHex(c8)&&isHex(c9)&&isHex(c10)) {
+            const frame = decodeAscii(window.__rxBytes, 0, 11);
+            retrievedValue.innerHTML = frame;
+            setTimestampNow();
+            processReceivedString(frame);
+            window.__rxBytes = window.__rxBytes.slice(11);
+            continue;
+          }
+        }
+        const nextIdxM = window.__rxBytes.indexOf(35, 1);
+        if (nextIdxM > 0) {
+          const frame = decodeAscii(window.__rxBytes, 0, nextIdxM);
+          retrievedValue.innerHTML = frame;
+          setTimestampNow();
+          processReceivedString(frame);
+          window.__rxBytes = window.__rxBytes.slice(nextIdxM);
+          continue;
+        } else {
+          if (window.__rxBytes.length >= 9 && window.__rxBytes.length <= 16) {
+            const frame = decodeAscii(window.__rxBytes, 0, window.__rxBytes.length);
+            retrievedValue.innerHTML = frame;
+            setTimestampNow();
+            processReceivedString(frame);
+            window.__rxBytes = new Uint8Array(0);
+            continue;
+          }
+        }
+      }
+      if (h8 === "#PSMAP##" || h8 === "#PZMAP##") break;
       if (h8 === "#AIRM###") {
         if (window.__rxBytes.length < 14) break;
         const frame = decodeAscii(window.__rxBytes, 0, 14);
@@ -655,6 +688,7 @@ function handleCharacteristicChange(event){
     }
     // Exact-length gating for #PRS (20 triplets) to avoid waiting for the next '#'
     const asciiHeader = decodeAscii(window.__rxBytes, 0, Math.min(8, window.__rxBytes.length));
+    if (asciiHeader.startsWith("#PSMAP##") || asciiHeader.startsWith("#PZMAP##")) break;
     if (asciiHeader.startsWith("#PRS")) {
       const need = 4 + 20 * 3;
       if (window.__rxBytes.length < need) break;
@@ -700,6 +734,29 @@ function handleCharacteristicChange(event){
     setTimestampNow();
     processReceivedString(frame);
     window.__rxBytes = window.__rxBytes.slice(nextIdx);
+  }
+  // Second pass for binary frames that may now be at buffer head
+  while (window.__rxBytes.length >= 9) {
+    const header8b = decodeAscii(window.__rxBytes, 0, 8);
+    if (header8b === "#PSMAP##" || header8b === "#PZMAP##") {
+      const needB = 9 + pixelsPerPackage;
+      if (window.__rxBytes.length < needB) break;
+      const colStartB = window.__rxBytes[8] >>> 0;
+      const packageNumberB = Math.floor(colStartB / 6);
+      pixelCount = packageNumberB * pixelsPerPackage;
+      for (let i = 0; i < pixelsPerPackage; i++) {
+        if ((pixelCount + i) >= totalPixelCount) break;
+        imageGreyPixelArray[pixelCount + i] = window.__rxBytes[9 + i];
+      }
+      container = document.getElementById("pressuremapContainer");
+      if (pixelCount >= 840 && container.style.display == "block") {
+        if (header8b === "#PSMAP##") { window.lastMapKind = "PS"; drawPSColorMap(); }
+        else { window.lastMapKind = "PZ"; drawPZColorMap(); }
+      }
+      window.__rxBytes = window.__rxBytes.slice(needB);
+      continue;
+    }
+    break;
   }
   // Leave any residual bytes for next notification without aggressive truncation
 }
@@ -887,6 +944,20 @@ function processReceivedString(rx_data) {
           }
         }
       }
+      else if (rx_data.substring(0, 7) == "#MALLOW") {
+        const hex = rx_data.substring(7, 11);
+        let mask = 0;
+        try { mask = parseInt(hex, 16); } catch (_) { mask = 0; }
+        const setChk = (id, on)=>{ const el=document.getElementById(id); if (el) el.checked = !!on; };
+        setChk("chkAllowCooling",         (mask & 0x0001));
+        setChk("chkAllowOccupancy",       (mask & 0x0002));
+        setChk("chkAllowClassify",        (mask & 0x0004));
+        setChk("chkAllowPress",           (mask & 0x0008));
+        setChk("chkAllowFocus",           (mask & 0x0010));
+        setChk("chkAllowProbe",           (mask & 0x0020));
+        setChk("chkAllowEdge",            (mask & 0x0040));
+        setChk("chkAllowTare",            (mask & 0x0080));
+      }
       else if (rx_data.substring(0, 5) == "#THRS") {
         const vals = [];
         for (let i = 0; i < 6; i++) vals.push(Number(rx_data.substring(5 + i*3, 8 + i*3)));
@@ -1026,6 +1097,39 @@ function processReceivedString(rx_data) {
     console.log(name); // "TypeError"
     console.log(message); // error message
   }
+}
+
+function requestAllowlist() {
+  writeOnCharacteristic("*MALLOW?");
+}
+
+function applyAllowlist() {
+  const get = (id)=>!!document.getElementById(id)?.checked;
+  let mask = 0;
+  if (get("chkAllowCooling"))   mask |= 0x0001;
+  if (get("chkAllowOccupancy")) mask |= 0x0002;
+  if (get("chkAllowClassify"))  mask |= 0x0004;
+  if (get("chkAllowPress"))     mask |= 0x0008;
+  if (get("chkAllowFocus"))     mask |= 0x0010;
+  if (get("chkAllowProbe"))     mask |= 0x0020;
+  if (get("chkAllowEdge"))      mask |= 0x0040;
+  if (get("chkAllowTare"))      mask |= 0x0080;
+  const hex = ("0000" + mask.toString(16).toUpperCase()).slice(-4);
+  writeOnCharacteristic("*MALLOW=0x" + hex);
+}
+
+function setAllowDefaults() {
+  const set = (id, on)=>{ const el=document.getElementById(id); if (el) el.checked = !!on; };
+  set("chkAllowCooling", false);
+  set("chkAllowOccupancy", true);
+  set("chkAllowClassify", true);
+  set("chkAllowPress", true);
+  set("chkAllowFocus", false);
+  set("chkAllowProbe", false);
+  set("chkAllowEdge", false);
+  set("chkAllowTare", false);
+  writeOnCharacteristic("*MALLOWD");
+  setTimeout(()=>requestAllowlist(), 400);
 }
 
 /* function loadColorMapData(receivedString) {
@@ -1980,6 +2084,7 @@ function showExtraSettings() {
   if (bg) bg.style.display = "none";
   if (extra) extra.style.display = "block";
   writeOnCharacteristic("#RTHRS");
+  if (typeof requestAllowlist === "function") requestAllowlist();
 }
 
 function returnFromExtraSettings() {

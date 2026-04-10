@@ -306,7 +306,46 @@
               <button class="animatedButton w3-small" style="margin-top:8px; padding:6px 12px" onclick="requestThresholds()">Request Thresholds</button>
             </div>
             <div class="settings-col"></div>
-            <div class="settings-col"></div>
+            <div class="settings-col">
+              <div class="settings-col-title w3-medium">Manual-Mode Allowlist</div>
+              <div class="settings-row w3-small">
+                <label for="chkAllowCooling">Cooling</label>
+                <input type="checkbox" id="chkAllowCooling">
+              </div>
+              <div class="settings-row w3-small">
+                <label for="chkAllowOccupancy">Occupancy</label>
+                <input type="checkbox" id="chkAllowOccupancy">
+              </div>
+              <div class="settings-row w3-small"> 
+                <label for="chkAllowClassify">Classify</label>
+                <input type="checkbox" id="chkAllowClassify">
+              </div>
+              <div class="settings-row w3-small">
+                <label for="chkAllowPress">Pressure Sampling</label>
+                <input type="checkbox" id="chkAllowPress">
+              </div>
+              <div class="settings-row w3-small">
+                <label for="chkAllowFocus">Focus Scan</label>
+                <input type="checkbox" id="chkAllowFocus">
+              </div>
+              <div class="settings-row w3-small">
+                <label for="chkAllowProbe">Probe Routine</label>
+                <input type="checkbox" id="chkAllowProbe">
+              </div>
+              <div class="settings-row w3-small">
+                <label for="chkAllowEdge">Edge Preempt</label>
+                <input type="checkbox" id="chkAllowEdge">
+              </div>
+              <div class="settings-row w3-small">
+                <label for="chkAllowTare">Tare</label>
+                <input type="checkbox" id="chkAllowTare">
+              </div>
+              <div style="margin-top:8px; display:flex; flex-direction:column; align-items:center; gap:8px">
+                <button class="animatedButton w3-small" style="min-width:160px" onclick="requestAllowlist()">Request Allowlist</button>
+                <button class="animatedButton w3-small" style="min-width:160px" onclick="applyAllowlist()">Apply</button>
+                <button class="animatedButton w3-small" style="min-width:160px" onclick="setAllowDefaults()">Set Default</button>
+              </div>
+            </div>
           </div>
           
         </div>
@@ -437,18 +476,18 @@
               <p id="panelLeft" class="panelAirCell" style="left:320px; top:245px; width:152px; height:45px"></p>
               <p id="panelLeg" class="panelAirCell" style="left:156px; top:160px; width:38px; height:130px"></p>              
               <!-- Control -->
-              <p id="lblTemp1" class="w3-small w3-text-white" style="position:absolute; left:70px; top:330px">T1: --°C</p>
-              <p id="lblTemp2" class="w3-small w3-text-white" style="position:absolute; left:160px; top:330px">T2: --°C</p>
-              <p id="lblTemp3" class="w3-small w3-text-white" style="position:absolute; left:250px; top:330px">T3: --°C</p>
-              <p id="lblTemp4" class="w3-small w3-text-white" style="position:absolute; left:340px; top:330px">T4: --°C</p>
-              <p id="lblTemp5" class="w3-small w3-text-white" style="position:absolute; left:430px; top:330px">T5: --°C</p>
-              <p id="lblTemp6" class="w3-small w3-text-white" style="position:absolute; left:520px; top:330px">T6: --°C</p>
-              <p id="lblRh1" class="w3-small w3-text-white" style="position:absolute; left:70px; top:350px">RH1: --%</p>
-              <p id="lblRh2" class="w3-small w3-text-white" style="position:absolute; left:160px; top:350px">RH2: --%</p>
-              <p id="lblRh3" class="w3-small w3-text-white" style="position:absolute; left:250px; top:350px">RH3: --%</p>
-              <p id="lblRh4" class="w3-small w3-text-white" style="position:absolute; left:340px; top:350px">RH4: --%</p>
-              <p id="lblRh5" class="w3-small w3-text-white" style="position:absolute; left:430px; top:350px">RH5: --%</p>
-              <p id="lblRh6" class="w3-small w3-text-white" style="position:absolute; left:520px; top:350px">RH6: --%</p>
+              <p id="lblTemp1" class="w3-small w3-text-white" style="position:absolute; left:70px; top:330px">HOT: --°C</p>
+              <p id="lblTemp2" class="w3-small w3-text-white" style="position:absolute; left:160px; top:330px">COLD: --°C</p>
+              <p id="lblTemp3" class="w3-small w3-text-white" style="position:absolute; left:250px; top:330px">ROOM: --°C</p>
+              <p id="lblTemp4" class="w3-small w3-text-white" style="position:absolute; left:340px; top:330px">T1: --°C</p>
+              <p id="lblTemp5" class="w3-small w3-text-white" style="position:absolute; left:430px; top:330px">T2: --°C</p>
+              <p id="lblTemp6" class="w3-small w3-text-white" style="position:absolute; left:520px; top:330px">T3: --°C</p>
+              <p id="lblRh1" class="w3-small w3-text-white" style="position:absolute; left:70px; top:350px">RHT: --%</p>
+              <p id="lblRh2" class="w3-small w3-text-white" style="position:absolute; left:160px; top:350px">RHC: --%</p>
+              <p id="lblRh3" class="w3-small w3-text-white" style="position:absolute; left:250px; top:350px">RHR: --%</p>
+              <p id="lblRh4" class="w3-small w3-text-white" style="position:absolute; left:340px; top:350px">RH1: --%</p>
+              <p id="lblRh5" class="w3-small w3-text-white" style="position:absolute; left:430px; top:350px">RH2: --%</p>
+              <p id="lblRh6" class="w3-small w3-text-white" style="position:absolute; left:520px; top:350px">RH3: --%</p>
               <p id="lblTec" class="w3-small w3-text-white" style="position:absolute; left:610px; top:330px">TEC: OFF</p>
               <p id="lblBlower" class="w3-small w3-text-white" style="position:absolute; left:610px; top:350px">BLW: OFF</p>
             </div>
