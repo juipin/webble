@@ -433,6 +433,7 @@
           ctx.fillRect(0, 0, 672, 280);
         }
 
+        try { send("#SCREEN3"); } catch (_) {}
         startPmapTimer();
         return;
       }

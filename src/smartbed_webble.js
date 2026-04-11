@@ -635,7 +635,7 @@ function handleCharacteristicChange(event){
           const isHex = (x)=>(x>=48&&x<=57)||(x>=65&&x<=70)||(x>=97&&x<=102);
           if (isHex(c7)&&isHex(c8)&&isHex(c9)&&isHex(c10)) {
             const frame = decodeAscii(window.__rxBytes, 0, 11);
-            retrievedValue.innerHTML = frame;
+            if (retrievedValue) retrievedValue.innerHTML = frame;
             setTimestampNow();
             processReceivedString(frame);
             window.__rxBytes = window.__rxBytes.slice(11);
@@ -645,7 +645,7 @@ function handleCharacteristicChange(event){
         const nextIdxM = window.__rxBytes.indexOf(35, 1);
         if (nextIdxM > 0) {
           const frame = decodeAscii(window.__rxBytes, 0, nextIdxM);
-          retrievedValue.innerHTML = frame;
+          if (retrievedValue) retrievedValue.innerHTML = frame;
           setTimestampNow();
           processReceivedString(frame);
           window.__rxBytes = window.__rxBytes.slice(nextIdxM);
@@ -653,7 +653,7 @@ function handleCharacteristicChange(event){
         } else {
           if (window.__rxBytes.length >= 9 && window.__rxBytes.length <= 16) {
             const frame = decodeAscii(window.__rxBytes, 0, window.__rxBytes.length);
-            retrievedValue.innerHTML = frame;
+            if (retrievedValue) retrievedValue.innerHTML = frame;
             setTimestampNow();
             processReceivedString(frame);
             window.__rxBytes = new Uint8Array(0);
@@ -665,7 +665,7 @@ function handleCharacteristicChange(event){
       if (h8 === "#AIRM###") {
         if (window.__rxBytes.length < 14) break;
         const frame = decodeAscii(window.__rxBytes, 0, 14);
-        retrievedValue.innerHTML = frame;
+        if (retrievedValue) retrievedValue.innerHTML = frame;
         setTimestampNow();
         processReceivedString(frame);
         window.__rxBytes = window.__rxBytes.slice(14);
@@ -678,7 +678,7 @@ function handleCharacteristicChange(event){
         const need = 8 + (isFinite(len) ? len * 3 : 0);
         if (window.__rxBytes.length < need) break;
         const frame = decodeAscii(window.__rxBytes, 0, need);
-        retrievedValue.innerHTML = frame;
+        if (retrievedValue) retrievedValue.innerHTML = frame;
         setTimestampNow();
         processReceivedString(frame);
         window.__rxBytes = window.__rxBytes.slice(need);
@@ -693,7 +693,7 @@ function handleCharacteristicChange(event){
       const need = 4 + 20 * 3;
       if (window.__rxBytes.length < need) break;
       const frame = decodeAscii(window.__rxBytes, 0, need);
-      retrievedValue.innerHTML = frame;
+      if (retrievedValue) retrievedValue.innerHTML = frame;
       setTimestampNow();
       processReceivedString(frame);
       window.__rxBytes = window.__rxBytes.slice(need);
@@ -717,8 +717,8 @@ function handleCharacteristicChange(event){
             window.__rxBytes = window.__rxBytes.slice(nextIdx);
             continue;
           }
-          const frame = decodeAscii(window.__rxBytes, 0, need);
-          retrievedValue.innerHTML = frame;
+           const frame = decodeAscii(window.__rxBytes, 0, need);
+           if (retrievedValue) retrievedValue.innerHTML = frame;
           setTimestampNow();
           processReceivedString(frame);
           window.__rxBytes = window.__rxBytes.slice(need);
@@ -729,8 +729,8 @@ function handleCharacteristicChange(event){
     }
     const nextIdx = window.__rxBytes.indexOf(35, 1);
     if (nextIdx === -1) break;
-    const frame = decodeAscii(window.__rxBytes, 0, nextIdx);
-    retrievedValue.innerHTML = frame;
+     const frame = decodeAscii(window.__rxBytes, 0, nextIdx);
+     if (retrievedValue) retrievedValue.innerHTML = frame;
     setTimestampNow();
     processReceivedString(frame);
     window.__rxBytes = window.__rxBytes.slice(nextIdx);
@@ -1924,9 +1924,14 @@ function loadAndExecuteMPR(receivedString) {
     const s = window.__MPR_STATE__;
     if (!s) return;
     const elapsedMin = Math.floor((Date.now() - s.t0) / 60000);
-    let remain = s.minute - elapsedMin;
-    if (remain < 0) remain = 0;
+    let base = s.minute;
     const modeSel = document.getElementById('modeSelect');
+    if (base === 0 && modeSel) {
+      if (modeSel.value === "1") base = setDurationRedistribute || 0;
+      else if (modeSel.value === "2") base = setDurationAlternating || 0;
+    }
+    let remain = base - elapsedMin;
+    if (remain < 0) remain = 0;
     const lblAuto = document.getElementById('lblAutoTurn');
     const lblTop = document.getElementById('pressureReleaseActionMsg');
     if (modeSel && modeSel.value === "3") {
@@ -2084,7 +2089,7 @@ function showExtraSettings() {
   if (bg) bg.style.display = "none";
   if (extra) extra.style.display = "block";
   writeOnCharacteristic("#RTHRS");
-  if (typeof requestAllowlist === "function") requestAllowlist();
+  setTimeout(()=>{ if (typeof requestAllowlist === "function") requestAllowlist(); }, 300);
 }
 
 function returnFromExtraSettings() {
