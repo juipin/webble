@@ -31,6 +31,12 @@
     <style>
     body,h1,h2,h3,h4,h5,h6 {font-family: "Lato", sans-serif}
     .w3-bar,h1,button {font-family: "Montserrat", sans-serif}
+    .bagControlButton { font-size: 10px; line-height: 1.05; padding: 4px 6px; height: 28px; white-space: nowrap; }
+    .pressureScanStatus { color: #cccccc; font-size: 11px; font-weight: 600; text-align: left; }
+    .pressureScanActive { color: #ffe066; }
+    .pressureScanBusy { color: #ffb347; }
+    .pressureScanDone { color: #7CFC90; }
+    .pressureScanSweep { box-shadow: inset 0 0 0 2px #ffe066; }
     </style>
   </head>
 
@@ -417,11 +423,12 @@
             <div id="airmattressContainer">
               <!-- Static -->
               <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Air Mattress</p>
-              <img id="imgMattressDev" data-workflow="developer" src="asset/bg_mattress_dev322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
-              <img id="imgMattressUser" data-workflow="user" src="asset/bg_mattress_user322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
+              <img id="imgMattressDev" data-workflow="developer" class="airOffsetIgnore" src="asset/bg_mattress_dev322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
+              <img id="imgMattressUser" data-workflow="user" class="airOffsetIgnore" src="asset/bg_mattress_user322x121.jpg" alt="air mattress" style="position:absolute; left:66px; top:73px; width:644px; height:auto">
               <img id="imgExhaustBlocked" data-workflow="developer" src="asset/exhaustBlocked21x15.jpg" alt="exhaust" style="position:absolute; left:675px; top:312px; width:42px; height:auto">
               <!-- Show -->              
-              <p class="timestamp w3-medium w3-right-align" style="position:absolute; left:730px; top:12px">NaN</p>
+              <p class="timestamp airOffsetIgnore w3-medium w3-right-align" style="position:absolute; left:730px; top:12px">NaN</p>
+              <p id="lblPressureScanStatus" class="pressureScanStatus airOffsetIgnore" style="position:absolute; left:500px; top:52px; width:180px">Scan: idle</p>
               <p id="panelMainA" data-workflow="developer" class="panelAirCell" style="left:580px; top:137px; width:64px; height:57px"></p>
               <p id="panelMainB" data-workflow="developer" class="panelAirCell" style="left:580px; top:197px; width:64px; height:57px"></p>
               <p id="panelMainC" data-workflow="developer" class="panelAirCell" style="left:580px; top:257px; width:64px; height:57px"></p>
@@ -449,7 +456,11 @@
               <p id="lblPressureC6" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:285px">32</p>
               <p id="lblPressureA7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:125px; top:145px">32</p>
               <p id="lblPressureB7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:250px; top:145px">32</p>
-              <p id="lblPressureC7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:145px">32</p>
+              <p id="lblPressureC7" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:145px">32</p>              
+              <p id="lblPressureRight" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:165px">32</p>
+              <p id="lblPressureLeft" class="w3-small w3-text-black setVisibility" style="position:absolute; left:393px; top:272px">32</p>
+              <p id="lblPressureLeg" class="w3-small w3-text-black setVisibility" style="position:absolute; left:164px; top:165px">32</p>
+              <p id="lblPressurePillow" class="w3-small w3-text-black setVisibility" style="position:absolute; left:516px; top:231px">32</p>
               
               <p id="panelA1" class="panelAirCell" style="left:66px; top:175px; width:29px; height:100px"></p>
               <p id="panelB1" class="panelAirCell" style="left:95px; top:175px; width:29px; height:100px"></p>
@@ -490,6 +501,13 @@
               <p id="lblRh6" class="w3-small w3-text-white" style="position:absolute; left:520px; top:350px">RH3: --%</p>
               <p id="lblTec" class="w3-small w3-text-white" style="position:absolute; left:610px; top:330px">TEC: OFF</p>
               <p id="lblBlower" class="w3-small w3-text-white" style="position:absolute; left:610px; top:350px">BLW: OFF</p>
+              <p id="lblPressureSide" class="w3-medium w3-text-black setVisibility" style="position:absolute; left:510px; top:145px">Side: --</p>
+              <button id="btnBagLegUp" class="animatedButton bagControlButton airOffsetIgnore" style="position:absolute; left:716px; top:78px; width:74px">Leg Up</button>
+              <button id="btnBagLegDown" class="animatedButton bagControlButton airOffsetIgnore" style="position:absolute; left:716px; top:112px; width:74px">Leg Down</button>
+              <button id="btnBagLegHold" class="animatedButton bagControlButton airOffsetIgnore" style="position:absolute; left:716px; top:146px; width:74px">Leg Hold</button>
+              <button id="btnBagTurnL" class="animatedButton bagControlButton airOffsetIgnore" style="position:absolute; left:716px; top:192px; width:74px">Turn L</button>
+              <button id="btnBagTurnR" class="animatedButton bagControlButton airOffsetIgnore" style="position:absolute; left:716px; top:226px; width:74px">Turn R</button>
+              <button id="btnBagTurnStop" class="animatedButton bagControlButton airOffsetIgnore" style="position:absolute; left:716px; top:260px; width:74px">Turn Stop</button>
             </div>
 
 

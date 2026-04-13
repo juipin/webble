@@ -22,6 +22,19 @@ let executionMode = 0; // mode_mixed or Smart Mode
 let executionModeText = "Smart Mode";
 let timerPVS;
 let transmitCharacteristicFound;
+let mamActive = false;
+const AIR_MATTRESS_MIDDLE_OFFSET_PX = -20;
+const PRESSURE_SCAN_SWEEP_IDS = [
+  "panelA1","panelB1","panelC1","panelA2","panelB2","panelC2","panelA3","panelB3","panelC3",
+  "panelA4","panelB4","panelC4","panelA5","panelB5","panelC5","panelA6","panelB6","panelC6",
+  "panelA7","panelB7","panelC7"
+];
+let pressureScanActive = false;
+let pressureScanSweepTimer = null;
+let pressureScanSweepIndex = -1;
+let pressureScanStartedAt = 0;
+let pressureScanResetTimer = null;
+let lastPressureSnapshotKey = "";
 
 // Using ArrayBuffer with TypedArray instead of normal array as it uses contiguous memory space, allow direct memory manipulation, faster calculation, and conserve space
 const buffer1 = new ArrayBuffer(960);
@@ -303,6 +316,130 @@ function updatePressureBannerVisibility() {
   const visible = showOn(am) || showOn(pm) || showOn(bed);
   msg.style.visibility = visible && msg.innerHTML ? 'visible' : 'hidden';
 }
+
+function applyAirMattressMiddleOffset() {
+  const container = document.getElementById("airmattressContainer");
+  if (!container || container.dataset.middleOffsetApplied === "1") return;
+  const children = Array.from(container.children);
+  children.forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    if (el.classList.contains("airOffsetIgnore")) return;
+    if (!el.style || el.style.position !== "absolute" || !el.style.left) return;
+    const left = Number.parseFloat(el.style.left);
+    if (!Number.isFinite(left)) return;
+    el.style.left = String(left + AIR_MATTRESS_MIDDLE_OFFSET_PX) + "px";
+  });
+  container.dataset.middleOffsetApplied = "1";
+}
+
+function updateExecutionModeSelection(modeIndex) {
+  const idx = Number(modeIndex);
+  if (!modeSelect || !Number.isFinite(idx) || idx < 0 || idx >= modeSelect.options.length) return;
+  modeSelect.selectedIndex = idx;
+  executionMode = idx;
+  executionModeText = modeSelect.options[idx].text;
+}
+
+function syncManualModeState(sendSyncCommand) {
+  const selectedIdx = modeSelect ? modeSelect.selectedIndex : Number(executionMode);
+  const wantsManual = selectedIdx === 6 || String(executionModeText || "").toLowerCase().indexOf("manual") !== -1;
+  if (wantsManual) {
+    if (!mamActive) {
+      mamActive = true;
+      if (sendSyncCommand) {
+        writeOnCharacteristic("*SETMAM").catch(() => {
+          mamActive = false;
+        });
+      }
+    }
+    return;
+  }
+  if (mamActive) {
+    mamActive = false;
+    if (sendSyncCommand) {
+      writeOnCharacteristic("*CLRMAM").catch(() => {
+        mamActive = true;
+      });
+    }
+  }
+}
+
+function getPressureScanStatusLabel() {
+  return document.getElementById("lblPressureScanStatus");
+}
+
+function setPressureScanStatus(text, state) {
+  const el = getPressureScanStatusLabel();
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("pressureScanActive", "pressureScanBusy", "pressureScanDone");
+  if (state === "active") el.classList.add("pressureScanActive");
+  else if (state === "busy") el.classList.add("pressureScanBusy");
+  else if (state === "done") el.classList.add("pressureScanDone");
+}
+
+function clearPressureScanResetTimer() {
+  if (pressureScanResetTimer) {
+    window.clearTimeout(pressureScanResetTimer);
+    pressureScanResetTimer = null;
+  }
+}
+
+function clearPressureScanSweep() {
+  if (pressureScanSweepTimer) {
+    window.clearInterval(pressureScanSweepTimer);
+    pressureScanSweepTimer = null;
+  }
+  PRESSURE_SCAN_SWEEP_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("pressureScanSweep");
+  });
+  pressureScanSweepIndex = -1;
+}
+
+function finishPressureScan(text, state, resetDelayMs) {
+  pressureScanActive = false;
+  clearPressureScanSweep();
+  clearPressureScanResetTimer();
+  setPressureScanStatus(text, state);
+  if (resetDelayMs > 0) {
+    pressureScanResetTimer = window.setTimeout(() => {
+      setPressureScanStatus("Scan: idle", "");
+      pressureScanResetTimer = null;
+    }, resetDelayMs);
+  }
+}
+
+function startPressureScanSweep() {
+  clearPressureScanSweep();
+  clearPressureScanResetTimer();
+  pressureScanActive = true;
+  pressureScanStartedAt = Date.now();
+  setPressureScanStatus("Scan: running", "active");
+  pressureScanSweepTimer = window.setInterval(() => {
+    if (pressureScanSweepIndex >= 0) {
+      const prev = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
+      if (prev) prev.classList.remove("pressureScanSweep");
+    }
+    pressureScanSweepIndex = (pressureScanSweepIndex + 1) % PRESSURE_SCAN_SWEEP_IDS.length;
+    const next = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
+    if (next) next.classList.add("pressureScanSweep");
+  }, 180);
+  pressureScanResetTimer = window.setTimeout(() => {
+    if (pressureScanActive) finishPressureScan("Scan: waiting for data", "busy", 3000);
+  }, 12000);
+}
+
+function notePressureScanRequested() {
+  clearPressureScanResetTimer();
+  setPressureScanStatus("Scan: requesting...", "active");
+}
+
+function isPressureScanCommand(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return normalized === "PSCAN" || normalized === "#PSCAN" || normalized === "*PSCAN" ||
+         normalized === "PSCN" || normalized === "#PSCN";
+}
 // Bed
 const btnLeftTurn = document.getElementById('btnLeftTurn');
 const btnRightTurn = document.getElementById('btnRightTurn');
@@ -323,6 +460,40 @@ const imgLeftTurn = document.getElementById('imgLeftTurn');
 const imgRightTurn = document.getElementById('imgRightTurn');
 
 // Air Mattress
+const btnBagLegUp = document.getElementById('btnBagLegUp');
+const btnBagLegDown = document.getElementById('btnBagLegDown');
+const btnBagLegHold = document.getElementById('btnBagLegHold');
+const btnBagTurnL = document.getElementById('btnBagTurnL');
+const btnBagTurnR = document.getElementById('btnBagTurnR');
+const btnBagTurnStop = document.getElementById('btnBagTurnStop');
+let leftBagPressure = 0;
+let rightBagPressure = 0;
+let legBagPressure = 0;
+let pillowBagPressure = 0;
+let sideBagPressure = 0;
+
+function triggerBagCommand(command) {
+  if (command) writeOnCharacteristic(command);
+}
+
+function getTurnLeftCommand() {
+  if (leftBagPressure < PRESSURE_RELEASED && rightBagPressure < PRESSURE_RELEASED) return "#INFR";
+  if (rightBagPressure < PRESSURE_RELEASED && leftBagPressure >= PRESSURE_RELEASED) return "#TURNL";
+  return "#TURNL";
+}
+
+function getTurnRightCommand() {
+  if (leftBagPressure < PRESSURE_RELEASED && rightBagPressure < PRESSURE_RELEASED) return "#INFL";
+  if (leftBagPressure < PRESSURE_RELEASED && rightBagPressure >= PRESSURE_RELEASED) return "#TURNR";
+  return "#TURNR";
+}
+
+if (btnBagLegUp) btnBagLegUp.addEventListener('click', () => triggerBagCommand("#LG1"));
+if (btnBagLegDown) btnBagLegDown.addEventListener('click', () => triggerBagCommand("#LG0"));
+if (btnBagLegHold) btnBagLegHold.addEventListener('click', () => triggerBagCommand("#HLDG"));
+if (btnBagTurnL) btnBagTurnL.addEventListener('click', () => triggerBagCommand(getTurnLeftCommand()));
+if (btnBagTurnR) btnBagTurnR.addEventListener('click', () => triggerBagCommand(getTurnRightCommand()));
+if (btnBagTurnStop) btnBagTurnStop.addEventListener('click', () => triggerBagCommand("#HOLDB"));
 
 // Pressure Map
 const maxProbabilityLabel = document.getElementById('maxProbabilityLabel');
@@ -762,6 +933,7 @@ function handleCharacteristicChange(event){
 }
 
 function writeOnCharacteristic(value){
+  if (isPressureScanCommand(value)) notePressureScanRequested();
   if (bleTransmitServer && bleTransmitServer.connected && bleTransmitServiceFound) {
     return bleTransmitServiceFound.getCharacteristic(transmitCharacteristic)
       .then(characteristic => {
@@ -778,9 +950,7 @@ function writeOnCharacteristic(value){
         if (typeof value === "string" && value.startsWith("#AIRM00")) {
           const idx = parseInt(value.substring(7, 8), 10);
           if (!isNaN(idx) && modeSelect && idx >= 0 && idx < modeSelect.options.length) {
-            modeSelect.selectedIndex = idx;
-            executionMode = idx;
-            executionModeText = modeSelect.options[idx].text;
+            updateExecutionModeSelection(idx);
             const minute = minuteToNextMixedModeAction;
             pressureReleaseActionMsg.innerHTML = "";
             pressureReleaseActionMsg.style.visibility = 'hidden';
@@ -841,16 +1011,10 @@ function disconnectDevice() {
 }
 
 function runModeSelect() {
-  executionMode = modeSelect.selectedIndex;
-  executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
+  updateExecutionModeSelection(modeSelect.selectedIndex);
   var s = "#AIRM00" + executionMode;
   writeOnCharacteristic(s).then(()=> {
-    const txt = String(executionModeText || "").toLowerCase();
-    if (txt.indexOf("manual") !== -1) {
-      return writeOnCharacteristic("*SETMAM");
-    } else {
-      return writeOnCharacteristic("*CLRMAM");
-    }
+    syncManualModeState(true);
   }).catch(()=>{});
   
 }
@@ -909,7 +1073,8 @@ function processReceivedString(rx_data) {
         }
       }
       else if (rx_data.substring(0, 8) == "#AIRM###") {
-        modeSelect.selectedIndex = Number(rx_data.substring(8,11));
+        updateExecutionModeSelection(Number(rx_data.substring(8,11)));
+        syncManualModeState(true);
         pressureReleaseActionMsg.style.visibility = 'hidden';
         pressureReleaseActionMsg.innerHTML = "";
       }
@@ -1008,6 +1173,12 @@ function processReceivedString(rx_data) {
       }
       //ledAction.style.visibility = 'hidden';
     } else { // Bed plate actions
+      if (rx_data == "#PSCAN") {
+        startPressureScanSweep();
+      }
+      else if (rx_data == "#PSBUSY") {
+        finishPressureScan("Scan: busy", "busy", 3000);
+      }
       if (rx_data.length == 8) {
         ledAction.style.visibility = 'visible';
         if (rx_data == "#RSB####") {
@@ -1402,6 +1573,26 @@ function loadAndShowPVSData(receivedString) {
     for (let i=0;i<7;i++) setTxt("lblPressureA"+(i+1), String(data[pAStart+i]));
     for (let i=0;i<7;i++) setTxt("lblPressureB"+(i+1), String(data[pBStart+i]));
     for (let i=0;i<7;i++) setTxt("lblPressureC"+(i+1), String(data[pCStart+i]));
+    const snapshotKey = Array.from(data.slice(pAStart, pCStart + 7)).join(",");
+    if (pressureScanActive && snapshotKey !== lastPressureSnapshotKey && (Date.now() - pressureScanStartedAt) > 1200) {
+      finishPressureScan("Scan: updated", "done", 4000);
+    }
+    lastPressureSnapshotKey = snapshotKey;
+  }
+
+  if (dataLength >= 77) {
+    const pLeft = data[72], pRight = data[73], pLeg = data[74], pPillow = data[75], pSide = data[76];
+    const setTxt = (id, text) => { const el=document.getElementById(id); if (el) { el.textContent = text; el.style.visibility = "visible"; } };
+    leftBagPressure = pLeft;
+    rightBagPressure = pRight;
+    legBagPressure = pLeg;
+    pillowBagPressure = pPillow;
+    sideBagPressure = pSide;
+    setTxt("lblPressureLeft", String(pLeft));
+    setTxt("lblPressureRight", String(pRight));
+    setTxt("lblPressureLeg", String(pLeg));
+    setTxt("lblPressurePillow", String(pPillow));
+    setTxt("lblPressureSide", "Side: " + String(pSide));
   }
 }
 
@@ -1637,9 +1828,8 @@ function loadALLXData(receivedString) {
   // Apply to UI controls that reflect mode and settings
   if (typeof modeSelect !== "undefined" && modeSelect) {
     if (operatingModeSelected >= 0 && operatingModeSelected < modeSelect.options.length) {
-      modeSelect.selectedIndex = operatingModeSelected;
-      executionMode = modeSelect.value;
-      executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
+      updateExecutionModeSelection(operatingModeSelected);
+      syncManualModeState(true);
       if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minuteToNextMixedModeAction + " minutes";
       else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minuteToNextMixedModeAction + " minutes";
       else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
@@ -1780,9 +1970,8 @@ function loadALLXDataBytes(payload) {
   // Apply to UI
   if (typeof modeSelect !== "undefined" && modeSelect) {
     if (operatingModeSelected >= 0 && operatingModeSelected < modeSelect.options.length) {
-      modeSelect.selectedIndex = operatingModeSelected;
-      executionMode = modeSelect.value;
-      executionModeText = modeSelect.options[modeSelect.selectedIndex].text;
+      updateExecutionModeSelection(operatingModeSelected);
+      syncManualModeState(true);
       if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minuteToNextMixedModeAction + " minutes";
       else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minuteToNextMixedModeAction + " minutes";
       else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
@@ -2571,6 +2760,8 @@ function setMinMax(id, min, max) {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  applyAirMattressMiddleOffset();
+  setPressureScanStatus("Scan: idle", "");
   if (!window.SmartbedUICommon) return;
   window.SmartbedUICommon.init({
     connectButtonId: "bleButton",
