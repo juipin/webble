@@ -23,18 +23,24 @@ let executionModeText = "Smart Mode";
 let timerPVS;
 let transmitCharacteristicFound;
 let mamActive = false;
-const AIR_MATTRESS_MIDDLE_OFFSET_PX = -20;
+let reportedModeIndex = 0;
+let manualSelectedMode = null;
 const PRESSURE_SCAN_SWEEP_IDS = [
-  "panelA1","panelB1","panelC1","panelA2","panelB2","panelC2","panelA3","panelB3","panelC3",
-  "panelA4","panelB4","panelC4","panelA5","panelB5","panelC5","panelA6","panelB6","panelC6",
-  "panelA7","panelB7","panelC7"
+  "panelA1","panelA2","panelA3","panelA4","panelA5","panelA6","panelA7",
+  "panelB1","panelB2","panelB3","panelB4","panelB5","panelB6","panelB7",
+  "panelC1","panelC2","panelC3","panelC4","panelC5","panelC6","panelC7"
 ];
+const PRESSURE_SCAN_SWEEP_INTERVAL_MS = 200;
+const PRESSURE_SCAN_EXPECTED_MIN_MS = PRESSURE_SCAN_SWEEP_IDS.length * PRESSURE_SCAN_SWEEP_INTERVAL_MS;
 let pressureScanActive = false;
 let pressureScanSweepTimer = null;
 let pressureScanSweepIndex = -1;
 let pressureScanStartedAt = 0;
 let pressureScanResetTimer = null;
+let pressureScanPollTimer = null;
+let pressureBannerTimer = null;
 let lastPressureSnapshotKey = "";
+let probeUiActive = false;
 
 // Using ArrayBuffer with TypedArray instead of normal array as it uses contiguous memory space, allow direct memory manipulation, faster calculation, and conserve space
 const buffer1 = new ArrayBuffer(960);
@@ -317,19 +323,120 @@ function updatePressureBannerVisibility() {
   msg.style.visibility = visible && msg.innerHTML ? 'visible' : 'hidden';
 }
 
-function applyAirMattressMiddleOffset() {
-  const container = document.getElementById("airmattressContainer");
-  if (!container || container.dataset.middleOffsetApplied === "1") return;
-  const children = Array.from(container.children);
-  children.forEach((el) => {
-    if (!(el instanceof HTMLElement)) return;
-    if (el.classList.contains("airOffsetIgnore")) return;
-    if (!el.style || el.style.position !== "absolute" || !el.style.left) return;
-    const left = Number.parseFloat(el.style.left);
-    if (!Number.isFinite(left)) return;
-    el.style.left = String(left + AIR_MATTRESS_MIDDLE_OFFSET_PX) + "px";
-  });
-  container.dataset.middleOffsetApplied = "1";
+function setPressureBanner(text) {
+  const msg = document.getElementById("pressureReleaseActionMsg");
+  if (!msg) return;
+  msg.innerHTML = text || "";
+  updatePressureBannerVisibility();
+}
+
+function clearPressureBannerTimer() {
+  if (pressureBannerTimer) {
+    window.clearTimeout(pressureBannerTimer);
+    pressureBannerTimer = null;
+  }
+}
+
+function showTransientPressureBanner(text, delayMs = 3500) {
+  clearPressureBannerTimer();
+  setPressureBanner(text);
+  if (delayMs > 0) {
+    pressureBannerTimer = window.setTimeout(() => {
+      pressureBannerTimer = null;
+      updateSharedStatusBanner();
+    }, delayMs);
+  }
+}
+
+function getModeStatusText(modeIndex) {
+  switch (Number(modeIndex)) {
+    case 1: return "Redistribution";
+    case 2: return "Alternating";
+    case 3: return "Auto turn";
+    case 4: return "Static";
+    case 5: return "Autofirm";
+    case 6: return "Manual";
+    default: return "Smart mode";
+  }
+}
+
+function getCountdownLabel(msgCode) {
+  if (Number(msgCode) === 1) return "Redistribute in";
+  if (Number(msgCode) === 2) return "Alternating in";
+  if (Number(msgCode) === 3) return "Auto turn in";
+  return "Pressure relief in";
+}
+
+function isPressureReliefMode(modeIndex) {
+  const mode = Number(modeIndex);
+  return mode === 1 || mode === 2 || mode === 3;
+}
+
+function getManualCountdownState() {
+  const mprState = window.__MPR_STATE__;
+  const mode = Number(manualSelectedMode);
+  if (!mprState || !isPressureReliefMode(mode)) return null;
+  const msgCode = Number(mprState.nMsg);
+  if (mode === 2) return (msgCode === 1 || msgCode === 2) ? mprState : null;
+  if (mode === 1) return msgCode === 1 ? mprState : null;
+  if (mode === 3) return msgCode === 3 ? mprState : null;
+  return null;
+}
+
+function getModeFallbackMinutes(modeIndex) {
+  switch (Number(modeIndex)) {
+    case 1: return Number(minuteToNextRedistribute || setDurationRedistribute || 0);
+    case 2: return Number(minuteToNextAlternating || setDurationAlternating || 0);
+    case 3: return Number(minuteToNextAutoturn || setDurationAutoturn || 0);
+    default: return Number(minuteToNextMixedModeAction || setDurationMixed || 0);
+  }
+}
+
+function getRemainingMprMinutes() {
+  const s = window.__MPR_STATE__;
+  if (!s) return null;
+  const elapsedMin = Math.floor((Date.now() - s.t0) / 60000);
+  let base = Number(s.minute || 0);
+  if (base === 0) {
+    const modeHint = Number(s.nMsg || reportedModeIndex || executionMode);
+    base = getModeFallbackMinutes(modeHint);
+  }
+  return Math.max(0, base - elapsedMin);
+}
+
+function updateSharedStatusBanner() {
+  if (lblAutoTurn) {
+    lblAutoTurn.innerHTML = "";
+    lblAutoTurn.style.visibility = "hidden";
+  }
+  const remaining = getRemainingMprMinutes();
+  const mprState = window.__MPR_STATE__;
+  if (mamActive) {
+    if (probeUiActive) {
+      setPressureBanner("Manual: probe running");
+      return;
+    }
+    if (manualSelectedMode !== null && Number(manualSelectedMode) !== 6) {
+      const manualCountdownState = getManualCountdownState();
+      if (remaining !== null && manualCountdownState) {
+        setPressureBanner(getCountdownLabel(manualCountdownState.nMsg) + " " + String(remaining) + " minutes");
+        return;
+      }
+      setPressureBanner("Manual: " + getModeStatusText(manualSelectedMode) + " active");
+    } else {
+      setPressureBanner("Manual: waiting for action");
+    }
+    return;
+  }
+  if (remaining !== null && mprState && Number(reportedModeIndex) !== 4 && Number(reportedModeIndex) !== 5) {
+    setPressureBanner(getCountdownLabel(mprState.nMsg) + " " + String(remaining) + " minutes");
+    return;
+  }
+  if (executionModeText === "Redistribution") setPressureBanner("Redistribute in " + getModeFallbackMinutes(1) + " minutes");
+  else if (executionModeText === "Alternating") setPressureBanner("Alternating in " + getModeFallbackMinutes(2) + " minutes");
+  else if (executionModeText === "Smart Mode") setPressureBanner("Pressure relief in " + getModeFallbackMinutes(0) + " minutes");
+  else if (executionModeText === "Autoturn") setPressureBanner("Auto turn in " + getModeFallbackMinutes(3) + " minutes");
+  else setPressureBanner("");
 }
 
 function updateExecutionModeSelection(modeIndex) {
@@ -340,28 +447,36 @@ function updateExecutionModeSelection(modeIndex) {
   executionModeText = modeSelect.options[idx].text;
 }
 
-function syncManualModeState(sendSyncCommand) {
-  const selectedIdx = modeSelect ? modeSelect.selectedIndex : Number(executionMode);
-  const wantsManual = selectedIdx === 6 || String(executionModeText || "").toLowerCase().indexOf("manual") !== -1;
-  if (wantsManual) {
-    if (!mamActive) {
-      mamActive = true;
-      if (sendSyncCommand) {
-        writeOnCharacteristic("*SETMAM").catch(() => {
-          mamActive = false;
-        });
-      }
-    }
+function applyReportedModeToUi() {
+  if (mamActive) {
+    updateExecutionModeSelection(6);
     return;
   }
-  if (mamActive) {
-    mamActive = false;
-    if (sendSyncCommand) {
-      writeOnCharacteristic("*CLRMAM").catch(() => {
-        mamActive = true;
-      });
-    }
+  updateExecutionModeSelection(reportedModeIndex);
+}
+
+function updateManualModeState(active) {
+  mamActive = !!active;
+  applyReportedModeToUi();
+  updateSharedStatusBanner();
+}
+
+function updateModeFromDevice(modeIndex) {
+  const idx = Number(modeIndex);
+  if (!Number.isFinite(idx) || idx < 0) return;
+  const prevManualSelected = manualSelectedMode;
+  reportedModeIndex = idx;
+  if (mamActive && idx !== 6) manualSelectedMode = idx;
+  else if (idx === 6) manualSelectedMode = null;
+  applyReportedModeToUi();
+  if (mamActive && idx !== 6 && idx !== prevManualSelected) {
+    showTransientPressureBanner("Manual: " + getModeStatusText(idx) + " active");
   }
+  updateSharedStatusBanner();
+}
+
+function requestManualModeState() {
+  return writeOnCharacteristic("*W-MAM").catch(() => {});
 }
 
 function getPressureScanStatusLabel() {
@@ -385,6 +500,24 @@ function clearPressureScanResetTimer() {
   }
 }
 
+function clearPressureScanPollTimer() {
+  if (pressureScanPollTimer) {
+    window.clearInterval(pressureScanPollTimer);
+    pressureScanPollTimer = null;
+  }
+}
+
+function startPressureScanPolling() {
+  clearPressureScanPollTimer();
+  pressureScanPollTimer = window.setInterval(() => {
+    if (!pressureScanActive || !bleTransmitServer || !bleTransmitServer.connected) {
+      clearPressureScanPollTimer();
+      return;
+    }
+    writeOnCharacteristic("#RP&VS").catch(() => {});
+  }, 700);
+}
+
 function clearPressureScanSweep() {
   if (pressureScanSweepTimer) {
     window.clearInterval(pressureScanSweepTimer);
@@ -401,6 +534,7 @@ function finishPressureScan(text, state, resetDelayMs) {
   pressureScanActive = false;
   clearPressureScanSweep();
   clearPressureScanResetTimer();
+  clearPressureScanPollTimer();
   setPressureScanStatus(text, state);
   if (resetDelayMs > 0) {
     pressureScanResetTimer = window.setTimeout(() => {
@@ -413,21 +547,37 @@ function finishPressureScan(text, state, resetDelayMs) {
 function startPressureScanSweep() {
   clearPressureScanSweep();
   clearPressureScanResetTimer();
+  clearPressureScanPollTimer();
   pressureScanActive = true;
   pressureScanStartedAt = Date.now();
+  lastPressureSnapshotKey = "";
   setPressureScanStatus("Scan: running", "active");
+  pressureScanSweepIndex = 0;
+  const first = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
+  if (first) first.classList.add("pressureScanSweep");
+  startPressureScanPolling();
   pressureScanSweepTimer = window.setInterval(() => {
     if (pressureScanSweepIndex >= 0) {
       const prev = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
       if (prev) prev.classList.remove("pressureScanSweep");
     }
-    pressureScanSweepIndex = (pressureScanSweepIndex + 1) % PRESSURE_SCAN_SWEEP_IDS.length;
+    if (pressureScanSweepIndex >= PRESSURE_SCAN_SWEEP_IDS.length - 1) {
+      pressureScanSweepIndex = PRESSURE_SCAN_SWEEP_IDS.length - 1;
+      if (pressureScanSweepTimer) {
+        window.clearInterval(pressureScanSweepTimer);
+        pressureScanSweepTimer = null;
+      }
+      const last = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
+      if (last) last.classList.add("pressureScanSweep");
+      return;
+    }
+    pressureScanSweepIndex = pressureScanSweepIndex + 1;
     const next = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
     if (next) next.classList.add("pressureScanSweep");
-  }, 180);
+  }, PRESSURE_SCAN_SWEEP_INTERVAL_MS);
   pressureScanResetTimer = window.setTimeout(() => {
-    if (pressureScanActive) finishPressureScan("Scan: waiting for data", "busy", 3000);
-  }, 12000);
+    if (pressureScanActive) finishPressureScan("Scan: waiting for cell results", "busy", 5000);
+  }, 20000);
 }
 
 function notePressureScanRequested() {
@@ -473,7 +623,11 @@ let pillowBagPressure = 0;
 let sideBagPressure = 0;
 
 function triggerBagCommand(command) {
-  if (command) writeOnCharacteristic(command);
+  if (!command) return;
+  writeOnCharacteristic(command)
+    .then(() => new Promise((resolve) => window.setTimeout(resolve, 120)))
+    .then(() => writeOnCharacteristic("#RP&VS"))
+    .catch(() => {});
 }
 
 function getTurnLeftCommand() {
@@ -710,6 +864,8 @@ function connectToDevice(){
           .then(() => writeOnCharacteristic("#RSETX"))
           .then(() => new Promise(res => setTimeout(res, 600)))
           .then(() => writeOnCharacteristic("#RSETS"))
+          .then(() => new Promise(res => setTimeout(res, 600)))
+          .then(() => requestManualModeState())
           .catch(err => console.log("Error in initial request chain:", err));
       } else {
         console.log("Initial request chain skipped: #ALLX already received");
@@ -842,6 +998,15 @@ function handleCharacteristicChange(event){
         window.__rxBytes = window.__rxBytes.slice(14);
         continue;
       }
+      if (h8.startsWith("#MAM###")) {
+        if (window.__rxBytes.length < 10) break;
+        const frame = decodeAscii(window.__rxBytes, 0, 10);
+        if (retrievedValue) retrievedValue.innerHTML = frame;
+        setTimestampNow();
+        processReceivedString(frame);
+        window.__rxBytes = window.__rxBytes.slice(10);
+        continue;
+      }
       if (h8.startsWith("#REMS")) {
         if (window.__rxBytes.length < 8) break;
         const lenStr = decodeAscii(window.__rxBytes, 5, 3);
@@ -950,10 +1115,8 @@ function writeOnCharacteristic(value){
         if (typeof value === "string" && value.startsWith("#AIRM00")) {
           const idx = parseInt(value.substring(7, 8), 10);
           if (!isNaN(idx) && modeSelect && idx >= 0 && idx < modeSelect.options.length) {
+            reportedModeIndex = idx;
             updateExecutionModeSelection(idx);
-            const minute = minuteToNextMixedModeAction;
-            pressureReleaseActionMsg.innerHTML = "";
-            pressureReleaseActionMsg.style.visibility = 'hidden';
           }
         }
       })
@@ -1011,12 +1174,29 @@ function disconnectDevice() {
 }
 
 function runModeSelect() {
-  updateExecutionModeSelection(modeSelect.selectedIndex);
-  var s = "#AIRM00" + executionMode;
-  writeOnCharacteristic(s).then(()=> {
-    syncManualModeState(true);
-  }).catch(()=>{});
-  
+  if (!modeSelect) return;
+  const requestedMode = modeSelect.selectedIndex;
+  if (requestedMode === 6) {
+    updateExecutionModeSelection(6);
+    updateManualModeState(true);
+    writeOnCharacteristic("*SETMAM")
+      .then(() => requestManualModeState())
+      .catch(() => {});
+    return;
+  }
+  reportedModeIndex = requestedMode;
+  manualSelectedMode = null;
+  updateExecutionModeSelection(requestedMode);
+  const s = "#AIRM00" + requestedMode;
+  if (mamActive) {
+    writeOnCharacteristic("*CLRMAM")
+      .then(() => new Promise((resolve) => window.setTimeout(resolve, 120)))
+      .then(() => writeOnCharacteristic(s))
+      .then(() => requestManualModeState())
+      .catch(() => {});
+    return;
+  }
+  writeOnCharacteristic(s).catch(() => {});
 }
 
 function runAccumulatedPressureSelect() {
@@ -1073,10 +1253,16 @@ function processReceivedString(rx_data) {
         }
       }
       else if (rx_data.substring(0, 8) == "#AIRM###") {
-        updateExecutionModeSelection(Number(rx_data.substring(8,11)));
-        syncManualModeState(true);
-        pressureReleaseActionMsg.style.visibility = 'hidden';
-        pressureReleaseActionMsg.innerHTML = "";
+        const nextMode = Number(rx_data.substring(8,11));
+        const prevMode = reportedModeIndex;
+        const manualWasActive = mamActive;
+        updateModeFromDevice(nextMode);
+        if (!manualWasActive && !mamActive && Number.isFinite(nextMode) && nextMode !== prevMode && nextMode !== 6) {
+          showTransientPressureBanner(getModeStatusText(nextMode) + " started");
+        }
+      }
+      else if (rx_data.substring(0, 7) == "#MAM###") {
+        updateManualModeState(Number(rx_data.substring(7,10)) === 1);
       }
       else if (rx_data.substring(0, 5) == "#SETS") {
         loadSETSData(rx_data.substring(5, rx_data.length));
@@ -1178,6 +1364,15 @@ function processReceivedString(rx_data) {
       }
       else if (rx_data == "#PSBUSY") {
         finishPressureScan("Scan: busy", "busy", 3000);
+      }
+      else if (rx_data == "#PROBE") {
+        probeUiActive = true;
+        clearPressureBannerTimer();
+        updateSharedStatusBanner();
+      }
+      else if (rx_data == "#PRBDONE") {
+        probeUiActive = false;
+        showTransientPressureBanner("Probe complete", 4000);
       }
       if (rx_data.length == 8) {
         ledAction.style.visibility = 'visible';
@@ -1574,7 +1769,7 @@ function loadAndShowPVSData(receivedString) {
     for (let i=0;i<7;i++) setTxt("lblPressureB"+(i+1), String(data[pBStart+i]));
     for (let i=0;i<7;i++) setTxt("lblPressureC"+(i+1), String(data[pCStart+i]));
     const snapshotKey = Array.from(data.slice(pAStart, pCStart + 7)).join(",");
-    if (pressureScanActive && snapshotKey !== lastPressureSnapshotKey && (Date.now() - pressureScanStartedAt) > 1200) {
+    if (pressureScanActive && snapshotKey !== lastPressureSnapshotKey && (Date.now() - pressureScanStartedAt) >= PRESSURE_SCAN_EXPECTED_MIN_MS) {
       finishPressureScan("Scan: updated", "done", 4000);
     }
     lastPressureSnapshotKey = snapshotKey;
@@ -1828,14 +2023,8 @@ function loadALLXData(receivedString) {
   // Apply to UI controls that reflect mode and settings
   if (typeof modeSelect !== "undefined" && modeSelect) {
     if (operatingModeSelected >= 0 && operatingModeSelected < modeSelect.options.length) {
-      updateExecutionModeSelection(operatingModeSelected);
-      syncManualModeState(true);
-      if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minuteToNextMixedModeAction + " minutes";
-      else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minuteToNextMixedModeAction + " minutes";
-      else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
-      else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minuteToNextMixedModeAction + " minutes";
-      else pressureReleaseActionMsg.innerHTML = "";
-      updatePressureBannerVisibility();
+      updateModeFromDevice(operatingModeSelected);
+      updateSharedStatusBanner();
     }
   }
   if (lblStaticPressure && rangeStaticPressure) {
@@ -1970,14 +2159,8 @@ function loadALLXDataBytes(payload) {
   // Apply to UI
   if (typeof modeSelect !== "undefined" && modeSelect) {
     if (operatingModeSelected >= 0 && operatingModeSelected < modeSelect.options.length) {
-      updateExecutionModeSelection(operatingModeSelected);
-      syncManualModeState(true);
-      if (executionModeText === "Redistribution") pressureReleaseActionMsg.innerHTML = "Redistribute in " + minuteToNextMixedModeAction + " minutes";
-      else if (executionModeText === "Alternating") pressureReleaseActionMsg.innerHTML = "Alternate in " + minuteToNextMixedModeAction + " minutes";
-      else if (executionModeText === "Smart Mode") pressureReleaseActionMsg.innerHTML = "Pressure relief in " + minuteToNextMixedModeAction + " minutes";
-      else if (executionModeText === "Autoturn") pressureReleaseActionMsg.innerHTML = "Auto turn in " + minuteToNextMixedModeAction + " minutes";
-      else pressureReleaseActionMsg.innerHTML = "";
-      updatePressureBannerVisibility();
+      updateModeFromDevice(operatingModeSelected);
+      updateSharedStatusBanner();
     }
   }
   if (lblStaticPressure && rangeStaticPressure) {
@@ -2101,46 +2284,14 @@ function loadAndExecuteMPR(receivedString) {
   nBigSpontaneousMovements = data[2] || 0;
   nSmallSpontaneousMovements = data[3] || 0;
 
-  window.__MPR_STATE__ = { minute: minute, nMsg: nMsg, t0: Date.now() };
+  if (nMsg === 1) minuteToNextRedistribute = minute;
+  else if (nMsg === 2) minuteToNextAlternating = minute;
+  else if (nMsg === 3) minuteToNextAutoturn = minute;
+  else minuteToNextMixedModeAction = minute;
 
-  function fmtActionLabel(n) {
-    if (n === 1) return "Redistribute in";
-    if (n === 2) return "Alternating in";
-    if (n === 3) return "Auto turn in";
-    return "Pressure relief in";
-  }
+  window.__MPR_STATE__ = { minute: minute, nMsg: nMsg, t0: Date.now() };
   function updateCountdown() {
-    const s = window.__MPR_STATE__;
-    if (!s) return;
-    const elapsedMin = Math.floor((Date.now() - s.t0) / 60000);
-    let base = s.minute;
-    const modeSel = document.getElementById('modeSelect');
-    if (base === 0 && modeSel) {
-      if (modeSel.value === "1") base = setDurationRedistribute || 0;
-      else if (modeSel.value === "2") base = setDurationAlternating || 0;
-    }
-    let remain = base - elapsedMin;
-    if (remain < 0) remain = 0;
-    const lblAuto = document.getElementById('lblAutoTurn');
-    const lblTop = document.getElementById('pressureReleaseActionMsg');
-    if (modeSel && modeSel.value === "3") {
-      if (lblAuto) {
-        lblAuto.innerHTML = "Auto turn in " + String(remain) + " minutes";
-      }
-    } else if (modeSel && modeSel.value === "1") {
-      if (lblTop) {
-        lblTop.innerHTML = "Redistribute in " + String(remain) + " minutes";
-      }
-    } else if (modeSel && modeSel.value === "2") {
-      if (lblTop) {
-        lblTop.innerHTML = "Alternating in " + String(remain) + " minutes";
-      }
-    } else {
-      if (lblTop) {
-        lblTop.innerHTML = fmtActionLabel(s.nMsg) + " " + String(remain) + " minutes";
-      }
-    }
-    if (typeof updatePressureBannerVisibility === "function") updatePressureBannerVisibility();
+    updateSharedStatusBanner();
   }
   if (!window.__MPR_TICK__) {
     window.__MPR_TICK__ = setInterval(updateCountdown, 30000);
@@ -2760,7 +2911,6 @@ function setMinMax(id, min, max) {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  applyAirMattressMiddleOffset();
   setPressureScanStatus("Scan: idle", "");
   if (!window.SmartbedUICommon) return;
   window.SmartbedUICommon.init({
