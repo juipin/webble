@@ -25,6 +25,7 @@ let transmitCharacteristicFound;
 let mamActive = false;
 let reportedModeIndex = 0;
 let manualSelectedMode = null;
+let bleWriteChain = Promise.resolve();
 const PRESSURE_SCAN_SWEEP_IDS = [
   "panelA1","panelA2","panelA3","panelA4","panelA5","panelA6","panelA7",
   "panelB1","panelB2","panelB3","panelB4","panelB5","panelB6","panelB7",
@@ -287,14 +288,22 @@ const smartbedControlContainer = document.getElementById("smartbedControlContain
 // Summary Views
 const bedRadioGroup = document.getElementsByName("bedRadioGroup");
 const table = document.getElementById('topLevelTable');
+const summaryRows = table ? table.getElementsByTagName('tr') : null;
 if (table) {
-  const rows = table.getElementsByTagName('tr');
-  Array.from(rows).forEach((row) => {
+  Array.from(summaryRows).forEach((row) => {
     row.addEventListener('click', () => {
       const cells = row.getElementsByTagName('td');
       if (cells.length > 7) cells[7].textContent = "";
     });
   });
+}
+function setSummaryCell(rowIndex, cellIndex, value) {
+  if (!summaryRows) return;
+  const rowNum = Number(rowIndex);
+  if (!Number.isFinite(rowNum) || rowNum < 0 || rowNum >= summaryRows.length) return;
+  const row = summaryRows[rowNum];
+  if (!row || !row.cells || cellIndex < 0 || cellIndex >= row.cells.length) return;
+  row.cells[cellIndex].textContent = value;
 }
 // Background
 const modeSelect = document.getElementById('modeSelect');
@@ -755,13 +764,13 @@ var DCellColourCode = [];
 // Pressure Map
 const posture = [
   "Unknown",
-  "Right",
-  "Left",
   "Supine",
-  "Unknown",
-  "Sit on Right Edge",
-  "Sit on Left Edge",
+  "Left",
+  "Right",
   "Sit on Bed",
+  "Sit on Left Edge",
+  "Sit on Right Edge",
+  "Unknown",
   "Sleep on Right Edge",
   "Sleep on Left Edge",
   "Prone"
@@ -886,20 +895,16 @@ function onDisconnected(event){
 }
 
 function handleCharacteristicChange(event){
-  console.log("handleCharacteristicChange");
   const rawValue = event.target.value;
   let bytes = new Uint8Array(rawValue.buffer, rawValue.byteOffset, rawValue.byteLength);
  
   // Byte-buffer accumulator (robust to binary payloads and MTU fragmentation)
   if (!window.__rxBytes) window.__rxBytes = new Uint8Array(0);
   if (bytes.length > 0) {
-    console.log("bytes: ", bytes);
-    console.log("bytes.length: ", bytes.length);
     const merged = new Uint8Array(window.__rxBytes.length + bytes.length);
     merged.set(window.__rxBytes);
     merged.set(bytes, window.__rxBytes.length);
     window.__rxBytes = merged;
-    console.log("window.__rxBytes: ", window.__rxBytes);
     if (window.__rxBytes.length > 8192) {
       window.__rxBytes = window.__rxBytes.slice(-4096);
     }
@@ -912,10 +917,61 @@ function handleCharacteristicChange(event){
     for (let i = start; i < end; i++) s += String.fromCharCode(buf[i]);
     return s;
   };
+  const isDigitByte = (b) => b >= 48 && b <= 57;
+  const digitsOk = (start, len) => {
+    if (window.__rxBytes.length < start + len) return false;
+    for (let i = start; i < start + len; i++) {
+      if (!isDigitByte(window.__rxBytes[i])) return false;
+    }
+    return true;
+  };
+  const knownHeaders = [
+    "#PSMAP##", "#PZMAP##", "#POSE###", "#POSE_P#", "#AIRM###", "#MAM###",
+    "#REMS", "#TEXT", "#PRS", "#MALLOW", "#THRS", "#P&VS", "#SETS", "#SETX",
+    "#ALL ", "#ALLX", "#BODY", "#MPR", "#BEDS###", "#ALERT", "#ACKA", "#ACKX",
+    "#ACKR", "#PROBE", "#PRBDONE", "#PSCAN", "#PSBUSY", "#MPZ####"
+  ];
+  const startsWithKnownHeaderAt = (idx) => knownHeaders.some((header) => {
+    if (idx + header.length > window.__rxBytes.length) return false;
+    return decodeAscii(window.__rxBytes, idx, header.length) === header;
+  });
+  const startsWithKnownHeaderPrefixAt = (idx) => knownHeaders.some((header) => {
+    const available = window.__rxBytes.length - idx;
+    if (available <= 0) return false;
+    const testLen = Math.min(header.length, available);
+    return decodeAscii(window.__rxBytes, idx, testLen) === header.substring(0, testLen);
+  });
+  const findNextKnownHeader = (startIdx = 0) => {
+    for (let i = Math.max(0, startIdx); i < window.__rxBytes.length; i++) {
+      if (window.__rxBytes[i] !== 35) continue;
+      if (startsWithKnownHeaderAt(i) || startsWithKnownHeaderPrefixAt(i)) return i;
+    }
+    return -1;
+  };
+  const discardUntilKnownHeader = (reason, startIdx = 1) => {
+    const nextKnownIdx = findNextKnownHeader(startIdx);
+    if (nextKnownIdx <= 0) return false;
+    const dropped = decodeAscii(window.__rxBytes, 0, nextKnownIdx);
+    console.log("RX discarded fragment:", dropped, reason ? "(" + reason + ")" : "");
+    window.__rxBytes = window.__rxBytes.slice(nextKnownIdx);
+    return true;
+  };
+  const consumeAsciiFrame = (frameLen) => {
+    const frame = decodeAscii(window.__rxBytes, 0, frameLen);
+    if (frame.startsWith("#POSE###") || frame.startsWith("#POSE_P#") || frame.startsWith("#TEXT")) {
+      console.log("RX ascii frame:", frame);
+    }
+    if (retrievedValue) retrievedValue.innerHTML = frame;
+    setTimestampNow();
+    processReceivedString(frame);
+    window.__rxBytes = window.__rxBytes.slice(frameLen);
+  };
  
   // Drop leading garbage until '#'
-  const firstHashIdx = window.__rxBytes.indexOf(35);
+  const firstHashIdx = findNextKnownHeader(0);
   if (firstHashIdx > 0) {
+    const dropped = decodeAscii(window.__rxBytes, 0, firstHashIdx);
+    console.log("RX discarded fragment:", dropped, "(before known header)");
     window.__rxBytes = window.__rxBytes.slice(firstHashIdx);
   }
  
@@ -927,6 +983,10 @@ function handleCharacteristicChange(event){
       const need = 9 + pixelsPerPackage;
       if (window.__rxBytes.length < need) break;
       const colStart = window.__rxBytes[8] >>> 0;
+      if (colStart === 0) {
+        console.log("RX binary map:", header8);
+      }
+      setTimestampNow();
       const packageNumber = Math.floor(colStart / 6);
       pixelCount = packageNumber * pixelsPerPackage;
       for (let i = 0; i < pixelsPerPackage; i++) {
@@ -942,9 +1002,11 @@ function handleCharacteristicChange(event){
       processedBinary = true;
       continue;
     }
-    // If buffer doesn't start with '#', drop until next '#'
-    const hashIdx = window.__rxBytes.indexOf(35);
+    // If buffer doesn't start with a known header, drop until the next known header
+    const hashIdx = findNextKnownHeader(0);
     if (hashIdx > 0) {
+      const dropped = decodeAscii(window.__rxBytes, 0, hashIdx);
+      console.log("RX discarded fragment:", dropped, "(before binary header)");
       window.__rxBytes = window.__rxBytes.slice(hashIdx);
       continue;
     }
@@ -989,22 +1051,46 @@ function handleCharacteristicChange(event){
         }
       }
       if (h8 === "#PSMAP##" || h8 === "#PZMAP##") break;
+      if (h8 === "#POSE###") {
+        if (window.__rxBytes.length < 14) break;
+        if (!digitsOk(8, 6)) {
+          if (!discardUntilKnownHeader("bad #POSE digits")) break;
+          continue;
+        }
+        if (window.__rxBytes.length >= 17 && digitsOk(14, 3)) {
+          consumeAsciiFrame(17);
+          continue;
+        }
+        if (window.__rxBytes.length === 14 || (window.__rxBytes.length > 14 && window.__rxBytes[14] === 35)) {
+          consumeAsciiFrame(14);
+          continue;
+        }
+        if (window.__rxBytes.length < 17) break;
+      }
+      if (h8 === "#POSE_P#") {
+        if (window.__rxBytes.length < 14) break;
+        if (!digitsOk(8, 6)) {
+          if (!discardUntilKnownHeader("bad #POSE_P digits")) break;
+          continue;
+        }
+        if (window.__rxBytes.length >= 20 && digitsOk(14, 6)) {
+          consumeAsciiFrame(20);
+          continue;
+        }
+        if (window.__rxBytes.length === 14 || (window.__rxBytes.length > 14 && window.__rxBytes[14] === 35)) {
+          consumeAsciiFrame(14);
+          continue;
+        }
+        if (window.__rxBytes.length < 20) break;
+      }
       if (h8 === "#AIRM###") {
         if (window.__rxBytes.length < 14) break;
-        const frame = decodeAscii(window.__rxBytes, 0, 14);
-        if (retrievedValue) retrievedValue.innerHTML = frame;
-        setTimestampNow();
-        processReceivedString(frame);
-        window.__rxBytes = window.__rxBytes.slice(14);
+        consumeAsciiFrame(14);
         continue;
       }
       if (h8.startsWith("#MAM###")) {
         if (window.__rxBytes.length < 10) break;
-        const frame = decodeAscii(window.__rxBytes, 0, 10);
-        if (retrievedValue) retrievedValue.innerHTML = frame;
-        setTimestampNow();
-        processReceivedString(frame);
-        window.__rxBytes = window.__rxBytes.slice(10);
+        consumeAsciiFrame(10);
         continue;
       }
       if (h8.startsWith("#REMS")) {
@@ -1013,26 +1099,142 @@ function handleCharacteristicChange(event){
         const len = Number(lenStr);
         const need = 8 + (isFinite(len) ? len * 3 : 0);
         if (window.__rxBytes.length < need) break;
-        const frame = decodeAscii(window.__rxBytes, 0, need);
-        if (retrievedValue) retrievedValue.innerHTML = frame;
-        setTimestampNow();
-        processReceivedString(frame);
-        window.__rxBytes = window.__rxBytes.slice(need);
+        consumeAsciiFrame(need);
         window.__gotREMS = true;
         continue;
       }
+      if (h8.startsWith("#TEXT")) {
+        if (window.__rxBytes.length < 8) break;
+        const lenStr = decodeAscii(window.__rxBytes, 5, 3);
+        const len = Number(lenStr);
+        const need = 8 + (isFinite(len) ? len * 3 : 0);
+        if (window.__rxBytes.length < need) break;
+        if (!digitsOk(8, len * 3)) {
+          if (!discardUntilKnownHeader("bad #TEXT digits")) break;
+          continue;
+        }
+        consumeAsciiFrame(need);
+        continue;
+      }
+    }
+    // Deterministic fixed-length parsing for common ASCII frames.
+    const asciiHeader = decodeAscii(window.__rxBytes, 0, Math.min(8, window.__rxBytes.length));
+    if (asciiHeader.startsWith("#ALLX")) {
+      const fixedTriplets = 51; // 28 ALL + 22 SETX + 1 nameLen
+      const fixedChars = 5 + fixedTriplets * 3;
+      if (window.__rxBytes.length < fixedChars) break;
+      if (!digitsOk(5, fixedTriplets * 3)) {
+        if (!discardUntilKnownHeader("bad #ALLX header digits")) break;
+        continue;
+      }
+      const nameLen = Number(decodeAscii(window.__rxBytes, 5 + 50 * 3, 3));
+      if (!isFinite(nameLen) || nameLen < 0) {
+        if (!discardUntilKnownHeader("bad #ALLX name length")) break;
+        continue;
+      }
+      const totalTriplets = fixedTriplets + nameLen;
+      const need = 5 + totalTriplets * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(5, totalTriplets * 3)) {
+        if (!discardUntilKnownHeader("bad #ALLX digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      window.__gotALLX = true;
+      continue;
+    }
+    if (asciiHeader.startsWith("#ALL ")) {
+      const need = 5 + 28 * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(5, 28 * 3)) {
+        if (!discardUntilKnownHeader("bad #ALL digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      continue;
+    }
+    if (asciiHeader.startsWith("#SETS")) {
+      const need = 5 + 11 * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(5, 11 * 3)) {
+        if (!discardUntilKnownHeader("bad #SETS digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      continue;
+    }
+    if (asciiHeader.startsWith("#SETX")) {
+      const need = 5 + 22 * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(5, 22 * 3)) {
+        if (!discardUntilKnownHeader("bad #SETX digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      continue;
+    }
+    if (asciiHeader.startsWith("#P&VS")) {
+      const tripletCount = 77;
+      const need = 5 + tripletCount * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(5, tripletCount * 3)) {
+        if (!discardUntilKnownHeader("bad #P&VS digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      continue;
+    }
+    if (asciiHeader.startsWith("#THRS")) {
+      const need = 5 + 6 * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(5, 6 * 3)) {
+        if (!discardUntilKnownHeader("bad #THRS digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      continue;
+    }
+    if (asciiHeader.startsWith("#MPR")) {
+      const need = 4 + 4 * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(4, 4 * 3)) {
+        if (!discardUntilKnownHeader("bad #MPR digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      continue;
+    }
+    if (asciiHeader.startsWith("#ACKA") || asciiHeader.startsWith("#ACKX") || asciiHeader.startsWith("#ACKR")) {
+      if (window.__rxBytes.length < 5) break;
+      consumeAsciiFrame(5);
+      continue;
+    }
+    if (asciiHeader.startsWith("#PSCAN")) {
+      if (window.__rxBytes.length < 6) break;
+      consumeAsciiFrame(6);
+      continue;
+    }
+    if (asciiHeader.startsWith("#PROBE")) {
+      if (window.__rxBytes.length < 6) break;
+      consumeAsciiFrame(6);
+      continue;
+    }
+    if (asciiHeader.startsWith("#PSBUSY")) {
+      if (window.__rxBytes.length < 7) break;
+      consumeAsciiFrame(7);
+      continue;
+    }
+    if (asciiHeader.startsWith("#PRBDONE")) {
+      if (window.__rxBytes.length < 8) break;
+      consumeAsciiFrame(8);
+      continue;
     }
     // Exact-length gating for #PRS (20 triplets) to avoid waiting for the next '#'
-    const asciiHeader = decodeAscii(window.__rxBytes, 0, Math.min(8, window.__rxBytes.length));
     if (asciiHeader.startsWith("#PSMAP##") || asciiHeader.startsWith("#PZMAP##")) break;
     if (asciiHeader.startsWith("#PRS")) {
       const need = 4 + 20 * 3;
       if (window.__rxBytes.length < need) break;
-      const frame = decodeAscii(window.__rxBytes, 0, need);
-      if (retrievedValue) retrievedValue.innerHTML = frame;
-      setTimestampNow();
-      processReceivedString(frame);
-      window.__rxBytes = window.__rxBytes.slice(need);
+      consumeAsciiFrame(need);
       continue;
     }
     if (asciiHeader.startsWith("#REMS")) {
@@ -1048,28 +1250,37 @@ function handleCharacteristicChange(event){
             if (ch < 48 || ch > 57) { digitsOk = false; break; }
           }
           if (!digitsOk) {
-            const nextIdx = window.__rxBytes.indexOf(35, 1);
-            if (nextIdx === -1) break;
-            window.__rxBytes = window.__rxBytes.slice(nextIdx);
+            if (!discardUntilKnownHeader("bad #REMS digits")) break;
             continue;
           }
-           const frame = decodeAscii(window.__rxBytes, 0, need);
-           if (retrievedValue) retrievedValue.innerHTML = frame;
-          setTimestampNow();
-          processReceivedString(frame);
-          window.__rxBytes = window.__rxBytes.slice(need);
+          consumeAsciiFrame(need);
           window.__gotREMS = true;
           continue;
         }
       }
     }
-    const nextIdx = window.__rxBytes.indexOf(35, 1);
-    if (nextIdx === -1) break;
-     const frame = decodeAscii(window.__rxBytes, 0, nextIdx);
-     if (retrievedValue) retrievedValue.innerHTML = frame;
-    setTimestampNow();
-    processReceivedString(frame);
-    window.__rxBytes = window.__rxBytes.slice(nextIdx);
+    if (asciiHeader.startsWith("#TEXT")) {
+      if (window.__rxBytes.length >= 8) {
+        const lenStr = decodeAscii(window.__rxBytes, 5, 3);
+        const len = Number(lenStr);
+        if (isFinite(len) && len >= 0) {
+          const need = 8 + len * 3;
+          if (window.__rxBytes.length < need) break;
+          let textDigitsOk = true;
+          for (let i = 8; i < need; i++) {
+            const ch = window.__rxBytes[i];
+            if (ch < 48 || ch > 57) { textDigitsOk = false; break; }
+          }
+          if (!textDigitsOk) {
+            if (!discardUntilKnownHeader("bad #TEXT digits")) break;
+            continue;
+          }
+          consumeAsciiFrame(need);
+          continue;
+        }
+      }
+    }
+    if (!discardUntilKnownHeader("unknown header")) break;
   }
   // Second pass for binary frames that may now be at buffer head
   while (window.__rxBytes.length >= 9) {
@@ -1078,6 +1289,10 @@ function handleCharacteristicChange(event){
       const needB = 9 + pixelsPerPackage;
       if (window.__rxBytes.length < needB) break;
       const colStartB = window.__rxBytes[8] >>> 0;
+      if (colStartB === 0) {
+        console.log("RX binary map:", header8b);
+      }
+      setTimestampNow();
       const packageNumberB = Math.floor(colStartB / 6);
       pixelCount = packageNumberB * pixelsPerPackage;
       for (let i = 0; i < pixelsPerPackage; i++) {
@@ -1100,7 +1315,9 @@ function handleCharacteristicChange(event){
 function writeOnCharacteristic(value){
   if (isPressureScanCommand(value)) notePressureScanRequested();
   if (bleTransmitServer && bleTransmitServer.connected && bleTransmitServiceFound) {
-    return bleTransmitServiceFound.getCharacteristic(transmitCharacteristic)
+    const queuedWrite = bleWriteChain
+      .catch(() => {})
+      .then(() => bleTransmitServiceFound.getCharacteristic(transmitCharacteristic))
       .then(characteristic => {
         console.log("Found the transmit characteristic: ", characteristic.uuid);
         console.log("value =", value);
@@ -1119,11 +1336,14 @@ function writeOnCharacteristic(value){
             updateExecutionModeSelection(idx);
           }
         }
+        return new Promise((resolve) => window.setTimeout(resolve, 30));
       })
       .catch(error => {
         console.error("Error writing to the transmit characteristic: ", error);
         throw error;
       });
+    bleWriteChain = queuedWrite.then(() => undefined, () => undefined);
+    return queuedWrite;
   } else {
     console.error ("Bluetooth is not connected. Cannot write to characteristic.")
     window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!")
@@ -1189,6 +1409,9 @@ function runModeSelect() {
   updateExecutionModeSelection(requestedMode);
   const s = "#AIRM00" + requestedMode;
   if (mamActive) {
+    // Clear the local manual latch immediately so an #AIRM### response does not
+    // force the selector back to Manual while the explicit #MAM###000 ack is in flight.
+    updateManualModeState(false);
     writeOnCharacteristic("*CLRMAM")
       .then(() => new Promise((resolve) => window.setTimeout(resolve, 120)))
       .then(() => writeOnCharacteristic(s))
@@ -1234,13 +1457,30 @@ function processReceivedString(rx_data) {
         }
       }
       else if (rx_data.substring(0, 8) == "#POSE###") {
+        console.log("RX frame:", rx_data);
         maxProbabilityLabel.innerHTML = posture[Number(rx_data.substring(8,11))];
-        maxProbability.innerHTML = Number(rx_data.substring(11,14));
-        rows[selectedBedAddr].cells[3].textContent = posture[Number(rx_data.substring(8,11))];
+        maxProbability.innerHTML = Number(rx_data.substring(11,14)) + "%";
+        if (typeof selectedBedAddr !== "undefined") {
+          setSummaryCell(selectedBedAddr, 3, posture[Number(rx_data.substring(8,11))]);
+        }
       }
       else if (rx_data.substring(0, 8) == "#POSE_P#") {
+        console.log("RX frame:", rx_data);
         maxProbabilityLabel.innerHTML = posture[Number(rx_data.substring(8,11))];
-        maxProbability.innerHTML = Number(rx_data.substring(11,14));
+        maxProbability.innerHTML = Number(rx_data.substring(11,14)) + "%";
+      }
+      else if (rx_data.substring(0, 5) == "#TEXT") {
+        const len = Number(rx_data.substring(5, 8));
+        if (isFinite(len) && len >= 0 && rx_data.length >= 8 + len * 3) {
+          let s = "";
+          for (let i = 0; i < len; i++) {
+            const code = Number(rx_data.substring(8 + i * 3, 11 + i * 3));
+            s += String.fromCharCode(code);
+          }
+          console.log("RX frame:", rx_data);
+          console.log("RX text:", s);
+          if (retrievedValue) retrievedValue.innerHTML = s;
+        }
       }
       else if (rx_data.substring(0, 8) == "#MPZ####") {
         
@@ -1343,7 +1583,7 @@ function processReceivedString(rx_data) {
         var textMsg = "Bed " + rx_data.substring(9, 11) + "\n" + textMessage[Number(rx_data.substring(6, 8))];
         //try { responsiveVoice.speak(textMsg); }
         try {
-          rows[Number(rx_data.substring(9, 11))].cells[7].textContent = textMsgShort;
+          setSummaryCell(Number(rx_data.substring(9, 11)), 7, textMsgShort);
           // need a short delay to display the above first
           setTimeout(function() {
             var utterThis = new SpeechSynthesisUtterance(textMsg);
@@ -1443,7 +1683,7 @@ function processReceivedString(rx_data) {
           var textMsg = textMessage[Number(rx_data.substring(6, 8))];
           //try { responsiveVoice.speak(textMsg); }
           try {
-            rows[Number(rx_data.substring(8, 11))].cells[7].textContent = textMsgShort;
+            setSummaryCell(Number(rx_data.substring(8, 11)), 7, textMsgShort);
             // need a short delay to display the above first
             setTimeout(function() {
               var utterThis = new SpeechSynthesisUtterance(textMsg);
