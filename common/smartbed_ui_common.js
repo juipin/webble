@@ -291,11 +291,21 @@
 
     const startPmapTimer = () => {
       stopPmapTimer();
-      const chk = document.getElementById("isPosturePressure");
-      const useZ = !!(chk && chk.checked);
       const frozen = !!(document.getElementById("isPmapFrozen") && document.getElementById("isPmapFrozen").checked);
       if (!frozen) {
-        try { send(useZ ? "#RPZMAP" : "#RPSMAP"); } catch (_) {}
+        try {
+          const chk = document.getElementById("isPosturePressure");
+          const useZ = !!(chk && chk.checked);
+          const viewMode = (document.getElementById("pmapViewMode") && document.getElementById("pmapViewMode").value) || "raw";
+          if (viewMode === "smart") {
+            send("#RPBMAP");
+          } else if (viewMode === "compare") {
+            send(useZ ? "#RPZMAP" : "#RPSMAP");
+            send("#RPBMAP");
+          } else {
+            send(useZ ? "#RPZMAP" : "#RPSMAP");
+          }
+        } catch (_) {}
       }
       window.timerPMAP = setInterval(() => {
         try {
@@ -303,7 +313,15 @@
           if (frozenNow) return;
           const c = document.getElementById("isPosturePressure");
           const z = !!(c && c.checked);
-          send(z ? "#RPZMAP" : "#RPSMAP");
+          const viewMode = (document.getElementById("pmapViewMode") && document.getElementById("pmapViewMode").value) || "raw";
+          if (viewMode === "smart") {
+            send("#RPBMAP");
+          } else if (viewMode === "compare") {
+            send(z ? "#RPZMAP" : "#RPSMAP");
+            send("#RPBMAP");
+          } else {
+            send(z ? "#RPZMAP" : "#RPSMAP");
+          }
         } catch (_) {}
       }, 10000);
     };

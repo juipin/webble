@@ -430,7 +430,7 @@
               <img id="imgMattressUser" data-workflow="user" src="asset/bg_mattress_user322x121.jpg" alt="air mattress" style="position:absolute; left:41px; top:73px; width:644px; height:auto">
               <img id="imgExhaustBlocked" data-workflow="developer" src="asset/exhaustBlocked21x15.jpg" alt="exhaust" style="position:absolute; left:650px; top:312px; width:42px; height:auto">
               <!-- Show -->              
-              <p class="timestamp airOffsetIgnore w3-medium w3-right-align" style="position:absolute; left:705px; top:12px">NaN</p>
+              <p class="timestamp w3-medium w3-right-align" style="position:absolute; left:730px; top:12px">NaN</p>
               <p id="lblPressureScanStatus" class="pressureScanStatus" style="position:absolute; left:375px; top:52px; width:180px">Scan: idle</p>
               <p id="panelMainA" data-workflow="developer" class="panelAirCell" style="left:555px; top:137px; width:64px; height:57px"></p>
               <p id="panelMainB" data-workflow="developer" class="panelAirCell" style="left:555px; top:197px; width:64px; height:57px"></p>
@@ -521,11 +521,17 @@
               <p class="w3-xlarge w3-left-align" style="padding:10px 16px">Pressure Map</p>
               <p class="w3-medium w3-left-align" style="position:absolute; left:510px; top:55px; color:orange">Posture</p>
               <p class="w3-medium w3-left-align" style="position:absolute; left:655px; top:55px; color:orange">Freeze</p>
+              <p class="w3-medium w3-left-align" style="position:absolute; left:660px; top:12px; color:orange">View</p>
               <!-- Show -->              
               <p class="timestamp w3-medium w3-right-align" style="position:absolute; left:730px; top:12px">NaN</p>
               <p id="maxProbabilityLabel" class="w3-medium w3-left-align" style="position:absolute; left:200px; top:55px">Unknown</p>
               <p id="maxProbability" class="w3-medium w3-left-align" style="position:absolute; left:370px; top:55px">100%</p>
               <!-- Control -->
+              <select id="pmapViewMode" style="position:absolute; left:570px; top:12px; width:80px" onchange="runAccumulatedPressureSelect()">
+                <option value="raw">Raw</option>
+                <option value="smart">Smart</option>
+                <option value="compare">Compare</option>
+              </select>
               <label class="switch" style="position:absolute; left:450px; top:55px" onchange="runAccumulatedPressureSelect()"><input id="isPosturePressure" type="checkbox"><span class="slider round"></span></label>
               <label class="switch" style="position:absolute; left:595px; top:55px" onchange="togglePmapFreeze()"><input id="isPmapFrozen" type="checkbox"><span class="slider round"></span></label>
               <canvas id="pressureMapCanvas" width="672" height="280" style="position:absolute; left:64px; top:84px; border:2px solid white"></canvas>

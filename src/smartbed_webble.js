@@ -45,7 +45,10 @@ let probeUiActive = false;
 
 // Using ArrayBuffer with TypedArray instead of normal array as it uses contiguous memory space, allow direct memory manipulation, faster calculation, and conserve space
 const buffer1 = new ArrayBuffer(960);
-let imageGreyPixelArray = new Uint8Array(buffer1);
+let rawImageGreyPixelArray = new Uint8Array(buffer1);
+let imageGreyPixelArray = rawImageGreyPixelArray;
+const bufferPmapSmart = new ArrayBuffer(960);
+let smartImageGreyPixelArray = new Uint8Array(bufferPmapSmart);
 const buffer2 = new ArrayBuffer(121);
 let dataArray = new Uint8Array(buffer2);
 const buffer3 = new ArrayBuffer(16);
@@ -663,6 +666,7 @@ const maxProbabilityLabel = document.getElementById('maxProbabilityLabel');
 const maxProbability = document.getElementById('maxProbability');
 const pressureMapCanvas = document.getElementById('pressureMapCanvas');
 const isPosturePressure = document.getElementById('isPosturePressure');
+const pmapViewMode = document.getElementById('pmapViewMode');
 let isPosturePressureChecked = !!(isPosturePressure && isPosturePressure.checked);
 
 // Setting
@@ -926,7 +930,7 @@ function handleCharacteristicChange(event){
     return true;
   };
   const knownHeaders = [
-    "#PSMAP##", "#PZMAP##", "#POSE###", "#POSE_P#", "#AIRM###", "#MAM###",
+    "#PSMAP##", "#PZMAP##", "#PBMAP##", "#POSE###", "#POSE_P#", "#AIRM###", "#MAM###",
     "#REMS", "#TEXT", "#PRS", "#MALLOW", "#THRS", "#P&VS", "#SETS", "#SETX",
     "#ALL ", "#ALLX", "#BODY", "#MPR", "#BEDS###", "#ALERT", "#ACKA", "#ACKX",
     "#ACKR", "#PROBE", "#PRBDONE", "#PSCAN", "#PSBUSY", "#MPZ####"
@@ -975,11 +979,11 @@ function handleCharacteristicChange(event){
     window.__rxBytes = window.__rxBytes.slice(firstHashIdx);
   }
  
-  // 1) Pressure map packets (#PSMAP## / #PZMAP##) - binary payload follows 8-byte header
+  // 1) Pressure map packets (#PSMAP## / #PZMAP## / #PBMAP##) - binary payload follows 8-byte header
   let processedBinary = false;
   while (window.__rxBytes.length >= 9) {
     const header8 = decodeAscii(window.__rxBytes, 0, 8);
-    if (header8 === "#PSMAP##" || header8 === "#PZMAP##") {
+    if (header8 === "#PSMAP##" || header8 === "#PZMAP##" || header8 === "#PBMAP##") {
       const need = 9 + pixelsPerPackage;
       if (window.__rxBytes.length < need) break;
       const colStart = window.__rxBytes[8] >>> 0;
@@ -989,14 +993,16 @@ function handleCharacteristicChange(event){
       setTimestampNow();
       const packageNumber = Math.floor(colStart / 6);
       pixelCount = packageNumber * pixelsPerPackage;
+      const targetPixels = (header8 === "#PBMAP##") ? smartImageGreyPixelArray : rawImageGreyPixelArray;
       for (let i = 0; i < pixelsPerPackage; i++) {
         if ((pixelCount + i) >= totalPixelCount) break;
-        imageGreyPixelArray[pixelCount + i] = window.__rxBytes[9 + i];
+        targetPixels[pixelCount + i] = window.__rxBytes[9 + i];
       }
       container = document.getElementById("pressuremapContainer");
       if (pixelCount >= 840 && container.style.display == "block") {
-        if (header8 === "#PSMAP##") { window.lastMapKind = "PS"; drawPSColorMap(); }
-        else { window.lastMapKind = "PZ"; drawPZColorMap(); }
+        if (header8 === "#PSMAP##") window.lastRawMapKind = "PS";
+        else if (header8 === "#PZMAP##") window.lastRawMapKind = "PZ";
+        renderSelectedPressureMap();
       }
       window.__rxBytes = window.__rxBytes.slice(need);
       processedBinary = true;
@@ -1050,7 +1056,7 @@ function handleCharacteristicChange(event){
           }
         }
       }
-      if (h8 === "#PSMAP##" || h8 === "#PZMAP##") break;
+      if (h8 === "#PSMAP##" || h8 === "#PZMAP##" || h8 === "#PBMAP##") break;
       if (h8 === "#POSE###") {
         if (window.__rxBytes.length < 14) break;
         if (!digitsOk(8, 6)) {
@@ -1230,7 +1236,7 @@ function handleCharacteristicChange(event){
       continue;
     }
     // Exact-length gating for #PRS (20 triplets) to avoid waiting for the next '#'
-    if (asciiHeader.startsWith("#PSMAP##") || asciiHeader.startsWith("#PZMAP##")) break;
+    if (asciiHeader.startsWith("#PSMAP##") || asciiHeader.startsWith("#PZMAP##") || asciiHeader.startsWith("#PBMAP##")) break;
     if (asciiHeader.startsWith("#PRS")) {
       const need = 4 + 20 * 3;
       if (window.__rxBytes.length < need) break;
@@ -1285,7 +1291,7 @@ function handleCharacteristicChange(event){
   // Second pass for binary frames that may now be at buffer head
   while (window.__rxBytes.length >= 9) {
     const header8b = decodeAscii(window.__rxBytes, 0, 8);
-    if (header8b === "#PSMAP##" || header8b === "#PZMAP##") {
+    if (header8b === "#PSMAP##" || header8b === "#PZMAP##" || header8b === "#PBMAP##") {
       const needB = 9 + pixelsPerPackage;
       if (window.__rxBytes.length < needB) break;
       const colStartB = window.__rxBytes[8] >>> 0;
@@ -1295,14 +1301,16 @@ function handleCharacteristicChange(event){
       setTimestampNow();
       const packageNumberB = Math.floor(colStartB / 6);
       pixelCount = packageNumberB * pixelsPerPackage;
+      const targetPixelsB = (header8b === "#PBMAP##") ? smartImageGreyPixelArray : rawImageGreyPixelArray;
       for (let i = 0; i < pixelsPerPackage; i++) {
         if ((pixelCount + i) >= totalPixelCount) break;
-        imageGreyPixelArray[pixelCount + i] = window.__rxBytes[9 + i];
+        targetPixelsB[pixelCount + i] = window.__rxBytes[9 + i];
       }
       container = document.getElementById("pressuremapContainer");
       if (pixelCount >= 840 && container.style.display == "block") {
-        if (header8b === "#PSMAP##") { window.lastMapKind = "PS"; drawPSColorMap(); }
-        else { window.lastMapKind = "PZ"; drawPZColorMap(); }
+        if (header8b === "#PSMAP##") window.lastRawMapKind = "PS";
+        else if (header8b === "#PZMAP##") window.lastRawMapKind = "PZ";
+        renderSelectedPressureMap();
       }
       window.__rxBytes = window.__rxBytes.slice(needB);
       continue;
@@ -1427,12 +1435,19 @@ function runAccumulatedPressureSelect() {
   const container = document.getElementById("pressuremapContainer");
   const visible = container && container.style.display === "block";
   if (visible) {
-    const cmd = isPosturePressureChecked ? "#RPZMAP" : "#RPSMAP";
-    try { writeOnCharacteristic(cmd); } catch (_) {}
-    if (typeof window.lastMapKind === "string") {
-      if (window.lastMapKind === "PS") drawPSColorMap();
-      else if (window.lastMapKind === "PZ") drawPZColorMap();
-    }
+    const rawCmd = isPosturePressureChecked ? "#RPZMAP" : "#RPSMAP";
+    const viewMode = (pmapViewMode && pmapViewMode.value) ? pmapViewMode.value : "raw";
+    try {
+      if (viewMode === "smart") {
+        writeOnCharacteristic("#RPBMAP");
+      } else if (viewMode === "compare") {
+        writeOnCharacteristic(rawCmd);
+        writeOnCharacteristic("#RPBMAP");
+      } else {
+        writeOnCharacteristic(rawCmd);
+      }
+    } catch (_) {}
+    renderSelectedPressureMap();
   }
 }
 
@@ -1446,14 +1461,16 @@ function processReceivedString(rx_data) {
         // console.log("pixelCount: ", pixelCount);
         // console.log("container.style.display: ", container.style.display);
         if (pixelCount >= 840 && container.style.display == "block") {
-          drawPSColorMap();
+          window.lastRawMapKind = "PS";
+          renderSelectedPressureMap();
         }
       }
       else if (rx_data.substring(0, 8) == "#PZMAP##") {        
         loadColorMapData(rx_data.substring(8, rx_data.length));
         container = document.getElementById("pressuremapContainer"); 
         if (pixelCount >= 840 && container.style.display == "block") {
-          drawPZColorMap();
+          window.lastRawMapKind = "PZ";
+          renderSelectedPressureMap();
         }
       }
       else if (rx_data.substring(0, 8) == "#POSE###") {
@@ -1766,99 +1783,104 @@ function loadColorMapData(receivedString) {
   }
 }
 
-function drawPSColorMap() {
-  let canvasWidth = pressureMapCanvas.width;
-  let canvasHeight = pressureMapCanvas.height;
-  let g;
-  let red;
-  let green;
-  let blue;
-  let x;
-  let y;
-  // Clear the canvas
-  ctx.fillStyle = "grey";
-  ctx.fillRect(0, 0, 672, 280);
-  // Get canvas image data
-  let imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
-  let pixels = imgData.data;
-  // Replace rectangles (14x14 pixels) with force
-  let force = 0.0;
-  const mode = (document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer" && window.renderMode) ? window.renderMode : "normal";
-  const src = (mode === "smooth") ? getSmoothedArray(imageGreyPixelArray) : imageGreyPixelArray;
+function getPressureRenderMode() {
+  return (document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer" && window.renderMode) ? window.renderMode : "normal";
+}
+
+function getSelectedPmapViewMode() {
+  return (pmapViewMode && pmapViewMode.value) ? pmapViewMode.value : "raw";
+}
+
+function resolveRenderSource(src) {
+  const mode = getPressureRenderMode();
+  return { mode, data: (mode === "smooth") ? getSmoothedArray(src) : src };
+}
+
+function paintMapIntoImage(imgData, src, scaleX, xOffset) {
+  const pixels = imgData.data;
   for (let i = 0; i < totalPixelCount; i++) {
-    force = src[i]/255.00;
-    console.log("force: ", force);
-    if (force > 0) {
-      g = (((6 - (2 * 0.8)) * force) + 0.8);
-      red = Math.round((Math.max((3.0 - Math.abs(g - 4.0) - Math.abs(g - 5.0)) / 2.0, 0)) * 255);
-      green = Math.round((Math.max((4.0 - Math.abs(g - 2.0) - Math.abs(g - 4.0)) / 2.0, 0)) * 255);
-      blue = Math.round((Math.max((3.0 - Math.abs(g - 1.0) - Math.abs(g - 2.0)) / 2.0, 0)) * 255);
-      x = (Math.floor(i / numRows)) * pixelScaleX;
-      y = (numRows - 1 - (i % numRows)) * pixelScaleY;
-      // console.log("g: ", g);
-      // console.log("red: ", red);
-      // console.log("green: ", green);
-      // console.log("blue: ", blue);
-      // console.log("x: ", x);
-      // console.log("y: ", y);
-      for (let xx = x; xx < x+pixelScaleX; xx++) {
-        for (let yy = y; yy < y+pixelScaleY; yy++) {
-          var off = (yy * imgData.width + xx) * 4;
-          pixels[off] = red;
-          pixels[off + 1] = green;
-          pixels[off + 2] = blue;
-          pixels[off + 3] = 255;
-        }
+    const force = src[i] / 255.0;
+    if (force <= 0) continue;
+    const g = (((6 - (2 * 0.8)) * force) + 0.8);
+    const red = Math.round((Math.max((3.0 - Math.abs(g - 4.0) - Math.abs(g - 5.0)) / 2.0, 0)) * 255);
+    const green = Math.round((Math.max((4.0 - Math.abs(g - 2.0) - Math.abs(g - 4.0)) / 2.0, 0)) * 255);
+    const blue = Math.round((Math.max((3.0 - Math.abs(g - 1.0) - Math.abs(g - 2.0)) / 2.0, 0)) * 255);
+    const x = xOffset + (Math.floor(i / numRows) * scaleX);
+    const y = (numRows - 1 - (i % numRows)) * pixelScaleY;
+    for (let xx = x; xx < x + scaleX; xx++) {
+      for (let yy = y; yy < y + pixelScaleY; yy++) {
+        const off = (yy * imgData.width + xx) * 4;
+        pixels[off] = red;
+        pixels[off + 1] = green;
+        pixels[off + 2] = blue;
+        pixels[off + 3] = 255;
       }
     }
   }
-  // Put the pixel colours on the canvas
+}
+
+function drawColorMapFromSource(src, badgeKind) {
+  const canvasWidth = pressureMapCanvas.width;
+  const canvasHeight = pressureMapCanvas.height;
+  const resolved = resolveRenderSource(src);
+  ctx.fillStyle = "grey";
+  ctx.fillRect(0, 0, 672, 280);
+  const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+  paintMapIntoImage(imgData, resolved.data, pixelScaleX, 0);
   ctx.putImageData(imgData, 0, 0);
-  drawOverlayBadge("PS", mode);
+  window.lastMapKind = badgeKind;
+  drawOverlayBadge(badgeKind, resolved.mode);
+}
+
+function drawCompareColorMap() {
+  const canvasWidth = pressureMapCanvas.width;
+  const canvasHeight = pressureMapCanvas.height;
+  const rawResolved = resolveRenderSource(rawImageGreyPixelArray);
+  const smartResolved = resolveRenderSource(smartImageGreyPixelArray);
+  ctx.fillStyle = "grey";
+  ctx.fillRect(0, 0, 672, 280);
+  const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+  paintMapIntoImage(imgData, rawResolved.data, 7, 0);
+  paintMapIntoImage(imgData, smartResolved.data, 7, 336);
+  ctx.putImageData(imgData, 0, 0);
+  ctx.strokeStyle = "rgba(255,255,255,0.7)";
+  ctx.beginPath();
+  ctx.moveTo(336, 0);
+  ctx.lineTo(336, 280);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(6, 6, 80, 20);
+  ctx.fillRect(342, 6, 96, 20);
+  ctx.fillStyle = "#fff";
+  ctx.font = "12px sans-serif";
+  ctx.fillText(window.lastRawMapKind === "PS" ? "RAW PS" : "RAW PZ", 10, 21);
+  ctx.fillText("SMART PB", 346, 21);
+  window.lastMapKind = "CMP";
+}
+
+function drawPSColorMap() {
+  drawColorMapFromSource(rawImageGreyPixelArray, "PS");
 }
 
 function drawPZColorMap() {
-  let canvasWidth = pressureMapCanvas.width;
-  let canvasHeight = pressureMapCanvas.height;
-  let g;
-  let red;
-  let green;
-  let blue;
-  let x;
-  let y;
-  // Clear the canvas
-  ctx.fillStyle = "grey";
-  ctx.fillRect(0, 0, 672, 280);
-  // Get canvas image data
-  let imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
-  let pixels = imgData.data;
-  // Replace rectangles (14x14 pixels) with force
-  let force = 0.0;
-  const mode = (document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer" && window.renderMode) ? window.renderMode : "normal";
-  const src = (mode === "smooth") ? getSmoothedArray(imageGreyPixelArray) : imageGreyPixelArray;
-  for (let i = 0; i < totalPixelCount; i++) {
-    force = src[i]/255.00;
-    if (force > 0) {
-      g = (((6 - (2 * 0.8)) * force) + 0.8);
-      red = Math.round((Math.max((3.0 - Math.abs(g - 4.0) - Math.abs(g - 5.0)) / 2.0, 0)) * 255);
-      green = Math.round((Math.max((4.0 - Math.abs(g - 2.0) - Math.abs(g - 4.0)) / 2.0, 0)) * 255);
-      blue = Math.round((Math.max((3.0 - Math.abs(g - 1.0) - Math.abs(g - 2.0)) / 2.0, 0)) * 255);
-      x = (Math.floor(i / numRows)) * pixelScaleX;
-      y = (numRows - 1 - (i % numRows)) * pixelScaleY;
-      for (let xx = x; xx < x+pixelScaleX; xx++) {
-        for (let yy = y; yy < y+pixelScaleY; yy++) {
-          var off = (yy * imgData.width + xx) * 4;
-          pixels[off] = red;
-          pixels[off + 1] = green;
-          pixels[off + 2] = blue;
-          pixels[off + 3] = 255;
-        }
-      }
-    }
-  }    
-  // Put the pixel colours on the canvas
-  ctx.putImageData(imgData, 0, 0);
-  drawOverlayBadge("PZ", mode);
+  drawColorMapFromSource(rawImageGreyPixelArray, "PZ");
+}
+
+function drawPBColorMap() {
+  drawColorMapFromSource(smartImageGreyPixelArray, "PB");
+}
+
+function renderSelectedPressureMap() {
+  const viewMode = getSelectedPmapViewMode();
+  if (viewMode === "smart") {
+    drawPBColorMap();
+  } else if (viewMode === "compare") {
+    drawCompareColorMap();
+  } else if (window.lastRawMapKind === "PS") {
+    drawPSColorMap();
+  } else {
+    drawPZColorMap();
+  }
 }
 
 function getSmoothedArray(src) {
@@ -1895,15 +1917,13 @@ function drawOverlayBadge(kind, mode) {
 }
 
 if (typeof window.renderMode === "undefined") window.renderMode = "normal";
+if (typeof window.lastRawMapKind === "undefined") window.lastRawMapKind = "PZ";
 const pressureMapCanvasEl = document.getElementById("pressureMapCanvas");
 if (pressureMapCanvasEl) {
   pressureMapCanvasEl.addEventListener("click", () => {
     if (!(document.documentElement && document.documentElement.dataset && document.documentElement.dataset.workflowMode === "developer")) return;
     window.renderMode = (window.renderMode === "normal") ? "smooth" : "normal";
-    if (typeof window.lastMapKind === "string") {
-      if (window.lastMapKind === "PS") drawPSColorMap();
-      else if (window.lastMapKind === "PZ") drawPZColorMap();
-    }
+    renderSelectedPressureMap();
   });
 }
 
