@@ -779,8 +779,9 @@ const posture = [
   "Sleep on Left Edge",
   "Prone"
 ];
+const pressureMapBackground = "#2f343b";
 const ctx = pressureMapCanvas.getContext("2d", { willReadFrequently: true });
-ctx.fillStyle = "grey";
+ctx.fillStyle = pressureMapBackground;
 ctx.fillRect(0, 0, 672, 280);
 
 // Setting
@@ -1823,7 +1824,7 @@ function drawColorMapFromSource(src, badgeKind) {
   const canvasWidth = pressureMapCanvas.width;
   const canvasHeight = pressureMapCanvas.height;
   const resolved = resolveRenderSource(src);
-  ctx.fillStyle = "grey";
+  ctx.fillStyle = pressureMapBackground;
   ctx.fillRect(0, 0, 672, 280);
   const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
   paintMapIntoImage(imgData, resolved.data, pixelScaleX, 0);
@@ -1837,7 +1838,7 @@ function drawCompareColorMap() {
   const canvasHeight = pressureMapCanvas.height;
   const rawResolved = resolveRenderSource(rawImageGreyPixelArray);
   const smartResolved = resolveRenderSource(smartImageGreyPixelArray);
-  ctx.fillStyle = "grey";
+  ctx.fillStyle = pressureMapBackground;
   ctx.fillRect(0, 0, 672, 280);
   const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
   paintMapIntoImage(imgData, rawResolved.data, 7, 0);
