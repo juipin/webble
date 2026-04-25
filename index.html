@@ -529,11 +529,11 @@
               <!-- Control -->
               <select id="pmapViewMode" style="position:absolute; left:570px; top:12px; width:80px" onchange="runAccumulatedPressureSelect()">
                 <option value="raw">Raw</option>
-                <option value="smart">Smart</option>
+                <option value="smart" selected>Smart</option>
                 <option value="compare">Compare</option>
               </select>
-              <label class="switch" style="position:absolute; left:450px; top:55px" onchange="runAccumulatedPressureSelect()"><input id="isPosturePressure" type="checkbox"><span class="slider round"></span></label>
-              <label class="switch" style="position:absolute; left:595px; top:55px" onchange="togglePmapFreeze()"><input id="isPmapFrozen" type="checkbox"><span class="slider round"></span></label>
+              <label class="switch" style="position:absolute; left:450px; top:55px" onchange="runAccumulatedPressureSelect()"><input id="isPosturePressure" type="checkbox" checked><span class="slider round"></span></label>
+              <label class="switch" style="position:absolute; left:595px; top:55px" onchange="togglePmapFreeze()"><input id="isPmapFrozen" type="checkbox" checked><span class="slider round"></span></label>
               <canvas id="pressureMapCanvas" width="672" height="280" style="position:absolute; left:64px; top:84px; border:2px solid white"></canvas>
             </div>
             

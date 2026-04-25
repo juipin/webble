@@ -1437,7 +1437,7 @@ function runAccumulatedPressureSelect() {
   const visible = container && container.style.display === "block";
   if (visible) {
     const rawCmd = isPosturePressureChecked ? "#RPZMAP" : "#RPSMAP";
-    const viewMode = (pmapViewMode && pmapViewMode.value) ? pmapViewMode.value : "raw";
+    const viewMode = (pmapViewMode && pmapViewMode.value) ? pmapViewMode.value : "smart";
     try {
       if (viewMode === "smart") {
         writeOnCharacteristic("#RPBMAP");
@@ -1789,7 +1789,7 @@ function getPressureRenderMode() {
 }
 
 function getSelectedPmapViewMode() {
-  return (pmapViewMode && pmapViewMode.value) ? pmapViewMode.value : "raw";
+  return (pmapViewMode && pmapViewMode.value) ? pmapViewMode.value : "smart";
 }
 
 function resolveRenderSource(src) {
