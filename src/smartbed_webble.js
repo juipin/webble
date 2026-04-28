@@ -868,7 +868,7 @@ function connectToDevice(){
   .then(characteristic => {
     console.log("Transmit characteristic discovered:", characteristic.uuid);
     transmitCharacteristicFound = characteristic;
-    const scheduleMs = 7500;
+    const scheduleMs = 5500;
     setTimeout(() => {
       if (bleTransmitServer && bleTransmitServer.connected && !window.__seenAllx) {
         writeOnCharacteristic("#RALLX")
