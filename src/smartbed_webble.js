@@ -2617,7 +2617,7 @@ function saveSettings() {
   PRESSURE_FIRM = clampIntInRange(PRESSURE_FIRM, 32, 52);
   PRESSURE_SITTING = clampIntInRange(PRESSURE_SITTING, PRESSURE_FIRM, PRESSURE_FIRM + 20);
   PRESSURE_RELEASED = clampIntInRange(PRESSURE_RELEASED, 10, setStaticPressure);
-  PRESSURE_MAX = clampIntInRange(PRESSURE_MAX, 60, 80);
+  PRESSURE_MAX = clampIntInRange(PRESSURE_MAX, 60, 120);
   PRESSURE_HYSTERESIS = clampIntInRange(PRESSURE_HYSTERESIS, 0, 3);
 
   MIN_MATTRESS_TEMP_C = clampIntInRange(MIN_MATTRESS_TEMP_C, 22, 30);
@@ -3211,7 +3211,7 @@ function changeSliderSetting(setting) {
   else if (setting == "taPressureFirm") {PRESSURE_FIRM = clampIntInRange(v, 32, 52); el.value = String(PRESSURE_FIRM);}
   else if (setting == "taPressureSitting") {PRESSURE_SITTING = clampIntInRange(v, PRESSURE_FIRM, PRESSURE_FIRM + 20); el.value = String(PRESSURE_SITTING);}
   else if (setting == "taPressureReleased") {PRESSURE_RELEASED = clampIntInRange(v, 10, setStaticPressure + 10); el.value = String(PRESSURE_RELEASED);}
-  else if (setting == "taPressureMax") {PRESSURE_MAX = clampIntInRange(v, 60, 80); el.value = String(PRESSURE_MAX);}
+  else if (setting == "taPressureMax") {PRESSURE_MAX = clampIntInRange(v, 60, 120); el.value = String(PRESSURE_MAX);}
   else if (setting == "taPressureHysteresis") {PRESSURE_HYSTERESIS = clampIntInRange(v, 0, 3); el.value = String(PRESSURE_HYSTERESIS);}
   else if (setting == "taMinMattressTempC") {MIN_MATTRESS_TEMP_C = clampIntInRange(v, 22, 30); el.value = String(MIN_MATTRESS_TEMP_C);}
   else if (setting == "taMaxMattressTempC") {MAX_MATTRESS_TEMP_C = clampIntInRange(v, 25, 33); el.value = String(MAX_MATTRESS_TEMP_C);}
