@@ -31,8 +31,10 @@ const PRESSURE_SCAN_SWEEP_IDS = [
   "panelB1","panelB2","panelB3","panelB4","panelB5","panelB6","panelB7",
   "panelC1","panelC2","panelC3","panelC4","panelC5","panelC6","panelC7"
 ];
-const PRESSURE_SCAN_SWEEP_INTERVAL_MS = 200;
+const PRESSURE_SCAN_SWEEP_INTERVAL_MS = 250;
 const PRESSURE_SCAN_EXPECTED_MIN_MS = PRESSURE_SCAN_SWEEP_IDS.length * PRESSURE_SCAN_SWEEP_INTERVAL_MS;
+const PSCAN_RESULT_HOLD_MS = 5000;
+const PROBE_RESULT_HOLD_MS = 5000;
 let pressureScanActive = false;
 let pressureScanSweepTimer = null;
 let pressureScanSweepIndex = -1;
@@ -41,7 +43,15 @@ let pressureScanResetTimer = null;
 let pressureScanPollTimer = null;
 let pressureBannerTimer = null;
 let lastPressureSnapshotKey = "";
+let pressureScanPendingPressures = null;
+let pressureScanAwaitFinalFrame = false;
+let pressureScanLockUntil = 0;
+let pressureScanLockManual = false;
+let probePollTimer = null;
 let probeUiActive = false;
+let probeAwaitFinalFrame = false;
+let probeLockUntil = 0;
+let probeLockManual = false;
 
 // Using ArrayBuffer with TypedArray instead of normal array as it uses contiguous memory space, allow direct memory manipulation, faster calculation, and conserve space
 const buffer1 = new ArrayBuffer(960);
@@ -519,6 +529,12 @@ function clearPressureScanPollTimer() {
   }
 }
 
+function isAirmattressVisible() {
+  const el = document.getElementById("airmattressContainer");
+  if (!el) return false;
+  return window.getComputedStyle(el).display !== "none";
+}
+
 function startPressureScanPolling() {
   clearPressureScanPollTimer();
   pressureScanPollTimer = window.setInterval(() => {
@@ -526,8 +542,28 @@ function startPressureScanPolling() {
       clearPressureScanPollTimer();
       return;
     }
+    if (!isAirmattressVisible()) return;
     writeOnCharacteristic("#RP&VS").catch(() => {});
   }, 700);
+}
+
+function clearProbePollTimer() {
+  if (probePollTimer) {
+    window.clearInterval(probePollTimer);
+    probePollTimer = null;
+  }
+}
+
+function startProbePolling() {
+  clearProbePollTimer();
+  probePollTimer = window.setInterval(() => {
+    if (!probeUiActive || pressureScanActive || !bleTransmitServer || !bleTransmitServer.connected) {
+      clearProbePollTimer();
+      return;
+    }
+    if (!isAirmattressVisible()) return;
+    writeOnCharacteristic("#RP&VS").catch(() => {});
+  }, 350);
 }
 
 function clearPressureScanSweep() {
@@ -542,11 +578,26 @@ function clearPressureScanSweep() {
   pressureScanSweepIndex = -1;
 }
 
+function highlightPressureSweepCell(idx) {
+  const next = Number(idx);
+  if (!Number.isFinite(next) || next < 0 || next >= PRESSURE_SCAN_SWEEP_IDS.length) return;
+  if (pressureScanSweepIndex === next) return;
+  if (pressureScanSweepIndex >= 0) {
+    const prevEl = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
+    if (prevEl) prevEl.classList.remove("pressureScanSweep");
+  }
+  pressureScanSweepIndex = next;
+  const el = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
+  if (el) el.classList.add("pressureScanSweep");
+}
+
 function finishPressureScan(text, state, resetDelayMs) {
   pressureScanActive = false;
+  pressureScanAwaitFinalFrame = false;
   clearPressureScanSweep();
   clearPressureScanResetTimer();
   clearPressureScanPollTimer();
+  pressureScanPendingPressures = null;
   setPressureScanStatus(text, state);
   if (resetDelayMs > 0) {
     pressureScanResetTimer = window.setTimeout(() => {
@@ -561,35 +612,28 @@ function startPressureScanSweep() {
   clearPressureScanResetTimer();
   clearPressureScanPollTimer();
   pressureScanActive = true;
+  pressureScanAwaitFinalFrame = false;
   pressureScanStartedAt = Date.now();
   lastPressureSnapshotKey = "";
+  pressureScanPendingPressures = null;
   setPressureScanStatus("Scan: running", "active");
-  pressureScanSweepIndex = 0;
-  const first = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
-  if (first) first.classList.add("pressureScanSweep");
+  highlightPressureSweepCell(0);
   startPressureScanPolling();
   pressureScanSweepTimer = window.setInterval(() => {
-    if (pressureScanSweepIndex >= 0) {
-      const prev = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
-      if (prev) prev.classList.remove("pressureScanSweep");
-    }
-    if (pressureScanSweepIndex >= PRESSURE_SCAN_SWEEP_IDS.length - 1) {
-      pressureScanSweepIndex = PRESSURE_SCAN_SWEEP_IDS.length - 1;
-      if (pressureScanSweepTimer) {
-        window.clearInterval(pressureScanSweepTimer);
-        pressureScanSweepTimer = null;
-      }
-      const last = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
-      if (last) last.classList.add("pressureScanSweep");
+    if (!pressureScanActive) { clearPressureScanSweep(); return; }
+    const next = pressureScanSweepIndex + 1;
+    if (next >= PRESSURE_SCAN_SWEEP_IDS.length) {
+      clearPressureScanSweep();
+      setPressureScanStatus("Scan: finalizing", "busy");
       return;
     }
-    pressureScanSweepIndex = pressureScanSweepIndex + 1;
-    const next = document.getElementById(PRESSURE_SCAN_SWEEP_IDS[pressureScanSweepIndex]);
-    if (next) next.classList.add("pressureScanSweep");
+    highlightPressureSweepCell(next);
   }, PRESSURE_SCAN_SWEEP_INTERVAL_MS);
+
   pressureScanResetTimer = window.setTimeout(() => {
-    if (pressureScanActive) finishPressureScan("Scan: waiting for cell results", "busy", 5000);
-  }, 20000);
+    if (!pressureScanActive) return;
+    finishPressureScan("Scan: waiting device done", "busy", 5000);
+  }, Math.max(4000, PRESSURE_SCAN_EXPECTED_MIN_MS + 1200));
 }
 
 function notePressureScanRequested() {
@@ -934,7 +978,7 @@ function handleCharacteristicChange(event){
     "#PSMAP##", "#PZMAP##", "#PBMAP##", "#POSE###", "#POSE_P#", "#AIRM###", "#MAM###",
     "#REMS", "#TEXT", "#PRS", "#MALLOW", "#THRS", "#P&VS", "#SETS", "#SETX",
     "#ALL ", "#ALLX", "#BODY", "#MPR", "#BEDS###", "#ALERT", "#ACKA", "#ACKX",
-    "#ACKR", "#PROBE", "#PRBDONE", "#PSCAN", "#PSBUSY", "#MPZ####"
+    "#ACKR", "#PROBE", "#PRBDONE", "#PSCAN", "#PSBUSY", "#PSDONE", "#PSRES", "#MPZ####"
   ];
   const startsWithKnownHeaderAt = (idx) => knownHeaders.some((header) => {
     if (idx + header.length > window.__rxBytes.length) return false;
@@ -1231,6 +1275,21 @@ function handleCharacteristicChange(event){
       consumeAsciiFrame(7);
       continue;
     }
+    if (asciiHeader.startsWith("#PSDONE")) {
+      if (window.__rxBytes.length < 7) break;
+      consumeAsciiFrame(7);
+      continue;
+    }
+    if (asciiHeader.startsWith("#PSRES")) {
+      const need = 6 + 21 * 3;
+      if (window.__rxBytes.length < need) break;
+      if (!digitsOk(6, 21 * 3)) {
+        if (!discardUntilKnownHeader("bad #PSRES digits")) break;
+        continue;
+      }
+      consumeAsciiFrame(need);
+      continue;
+    }
     if (asciiHeader.startsWith("#PRBDONE")) {
       if (window.__rxBytes.length < 8) break;
       consumeAsciiFrame(8);
@@ -1322,6 +1381,12 @@ function handleCharacteristicChange(event){
 }
 
 function writeOnCharacteristic(value){
+  if (typeof value === "string" && value !== "#RP&VS") {
+    pressureScanLockManual = false;
+    pressureScanLockUntil = 0;
+    probeLockManual = false;
+    probeLockUntil = 0;
+  }
   if (isPressureScanCommand(value)) notePressureScanRequested();
   if (bleTransmitServer && bleTransmitServer.connected && bleTransmitServiceFound) {
     const queuedWrite = bleWriteChain
@@ -1503,6 +1568,22 @@ function processReceivedString(rx_data) {
       else if (rx_data.substring(0, 8) == "#MPZ####") {
         
       }
+      else if (rx_data.substring(0, 6) == "#PSRES") {
+        console.log("RX frame:", rx_data);
+        const vals = [];
+        for (let i = 0; i < 21; i++) vals.push(Number(rx_data.substring(6 + i*3, 9 + i*3)));
+        for (let i = 0; i < 7; i++) {
+          const elA = document.getElementById("lblPressureA" + (i + 1));
+          const elB = document.getElementById("lblPressureB" + (i + 1));
+          const elC = document.getElementById("lblPressureC" + (i + 1));
+          if (elA) elA.textContent = String(vals[i]);
+          if (elB) elB.textContent = String(vals[7 + i]);
+          if (elC) elC.textContent = String(vals[14 + i]);
+        }
+        pressureScanLockManual = !!mamActive;
+        pressureScanLockUntil = pressureScanLockManual ? 0 : (Date.now() + PSCAN_RESULT_HOLD_MS);
+        finishPressureScan("Scan: updated", "done", 4000);
+      }
       else if (rx_data.startsWith("#P&VS###") || rx_data.startsWith("#P&VS")) {
         container = document.getElementById("airmattressContainer");
         if (container.style.display == "block") {
@@ -1623,14 +1704,45 @@ function processReceivedString(rx_data) {
       else if (rx_data == "#PSBUSY") {
         finishPressureScan("Scan: busy", "busy", 3000);
       }
+      else if (rx_data == "#PSDONE") {
+        pressureScanAwaitFinalFrame = true;
+        setPressureScanStatus("Scan: finalizing", "busy");
+        writeOnCharacteristic("#RP&VS").catch(() => {});
+      }
+      else if (rx_data.substring(0, 6) == "#PSRES") {
+        const vals = [];
+        for (let i = 0; i < 21; i++) vals.push(Number(rx_data.substring(6 + i*3, 9 + i*3)));
+        for (let i = 0; i < 7; i++) {
+          const elA = document.getElementById("lblPressureA" + (i + 1));
+          const elB = document.getElementById("lblPressureB" + (i + 1));
+          const elC = document.getElementById("lblPressureC" + (i + 1));
+          if (elA) elA.textContent = String(vals[i]);
+          if (elB) elB.textContent = String(vals[7 + i]);
+          if (elC) elC.textContent = String(vals[14 + i]);
+        }
+        pressureScanLockManual = !!mamActive;
+        pressureScanLockUntil = pressureScanLockManual ? 0 : (Date.now() + PSCAN_RESULT_HOLD_MS);
+        finishPressureScan("Scan: updated", "done", 4000);
+      }
       else if (rx_data == "#PROBE") {
         probeUiActive = true;
+        probeAwaitFinalFrame = false;
+        probeLockManual = false;
+        probeLockUntil = 0;
+        pressureScanLockManual = false;
+        pressureScanLockUntil = 0;
+        clearPressureScanSweep();
         clearPressureBannerTimer();
         updateSharedStatusBanner();
+        startProbePolling();
       }
       else if (rx_data == "#PRBDONE") {
         probeUiActive = false;
+        clearPressureScanSweep();
         showTransientPressureBanner("Probe complete", 4000);
+        clearProbePollTimer();
+        probeAwaitFinalFrame = true;
+        writeOnCharacteristic("#RP&VS").catch(() => {});
       }
       if (rx_data.length == 8) {
         ledAction.style.visibility = 'visible';
@@ -2024,16 +2136,44 @@ function loadAndShowPVSData(receivedString) {
   }
   // Optional: per-cell pressures appended at the tail
   if (dataLength >= 72) {
-    const setTxt = (id, text) => { const el=document.getElementById(id); if (el) el.textContent = text; };
     const pAStart = 51, pBStart = 58, pCStart = 65;
-    for (let i=0;i<7;i++) setTxt("lblPressureA"+(i+1), String(data[pAStart+i]));
-    for (let i=0;i<7;i++) setTxt("lblPressureB"+(i+1), String(data[pBStart+i]));
-    for (let i=0;i<7;i++) setTxt("lblPressureC"+(i+1), String(data[pCStart+i]));
-    const snapshotKey = Array.from(data.slice(pAStart, pCStart + 7)).join(",");
-    if (pressureScanActive && snapshotKey !== lastPressureSnapshotKey && (Date.now() - pressureScanStartedAt) >= PRESSURE_SCAN_EXPECTED_MIN_MS) {
+    const pressures = Array.from(data.slice(pAStart, pCStart + 7));
+    lastPressureSnapshotKey = pressures.join(",");
+    const applyCellPressures = (vals) => {
+      if (!vals || vals.length < 21) return;
+      for (let i = 0; i < 7; i++) {
+        const elA = document.getElementById("lblPressureA" + (i + 1));
+        const elB = document.getElementById("lblPressureB" + (i + 1));
+        const elC = document.getElementById("lblPressureC" + (i + 1));
+        if (elA) elA.textContent = String(vals[i]);
+        if (elB) elB.textContent = String(vals[7 + i]);
+        if (elC) elC.textContent = String(vals[14 + i]);
+      }
+    };
+
+    if (pressureScanActive) pressureScanPendingPressures = pressures;
+
+    const nowMs = Date.now();
+    if (!pressureScanLockManual && pressureScanLockUntil > 0 && nowMs >= pressureScanLockUntil) pressureScanLockUntil = 0;
+    if (!probeLockManual && probeLockUntil > 0 && nowMs >= probeLockUntil) probeLockUntil = 0;
+
+    const pressureScanLocked = pressureScanLockManual || (pressureScanLockUntil > 0 && nowMs < pressureScanLockUntil);
+    const probeLocked = probeLockManual || (probeLockUntil > 0 && nowMs < probeLockUntil);
+
+    if (pressureScanAwaitFinalFrame) {
+      applyCellPressures(pressures);
+      pressureScanLockManual = !!mamActive;
+      pressureScanLockUntil = pressureScanLockManual ? 0 : (nowMs + PSCAN_RESULT_HOLD_MS);
+      pressureScanAwaitFinalFrame = false;
       finishPressureScan("Scan: updated", "done", 4000);
+    } else if (probeAwaitFinalFrame) {
+      applyCellPressures(pressures);
+      probeLockManual = !!mamActive;
+      probeLockUntil = probeLockManual ? 0 : (nowMs + PROBE_RESULT_HOLD_MS);
+      probeAwaitFinalFrame = false;
+    } else if (!pressureScanActive && !pressureScanLocked && !probeLocked) {
+      applyCellPressures(pressures);
     }
-    lastPressureSnapshotKey = snapshotKey;
   }
 
   if (dataLength >= 77) {
