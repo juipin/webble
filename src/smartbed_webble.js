@@ -52,6 +52,7 @@ let probeUiActive = false;
 let probeAwaitFinalFrame = false;
 let probeLockUntil = 0;
 let probeLockManual = false;
+let cal2pUiActive = false;
 
 // Using ArrayBuffer with TypedArray instead of normal array as it uses contiguous memory space, allow direct memory manipulation, faster calculation, and conserve space
 const buffer1 = new ArrayBuffer(960);
@@ -978,7 +979,7 @@ function handleCharacteristicChange(event){
     "#PSMAP##", "#PZMAP##", "#PBMAP##", "#POSE###", "#POSE_P#", "#AIRM###", "#MAM###",
     "#REMS", "#TEXT", "#PRS", "#MALLOW", "#THRS", "#P&VS", "#SETS", "#SETX",
     "#ALL ", "#ALLX", "#BODY", "#MPR", "#BEDS###", "#ALERT", "#ACKA", "#ACKX",
-    "#ACKR", "#PROBE", "#PRBDONE", "#PSCAN", "#PSBUSY", "#PSDONE", "#PSRES", "#MPZ####"
+    "#ACKR", "#PROBE", "#PRBDONE", "#PSCAN", "#PSBUSY", "#PSDONE", "#PSRES", "#CAL2P", "#CAL2POK", "#TARE", "#MPZ####"
   ];
   const startsWithKnownHeaderAt = (idx) => knownHeaders.some((header) => {
     if (idx + header.length > window.__rxBytes.length) return false;
@@ -1270,6 +1271,11 @@ function handleCharacteristicChange(event){
       consumeAsciiFrame(6);
       continue;
     }
+    if (asciiHeader.startsWith("#CAL2P")) {
+      if (window.__rxBytes.length < 6) break;
+      consumeAsciiFrame(6);
+      continue;
+    }
     if (asciiHeader.startsWith("#PSBUSY")) {
       if (window.__rxBytes.length < 7) break;
       consumeAsciiFrame(7);
@@ -1293,6 +1299,16 @@ function handleCharacteristicChange(event){
     if (asciiHeader.startsWith("#PRBDONE")) {
       if (window.__rxBytes.length < 8) break;
       consumeAsciiFrame(8);
+      continue;
+    }
+    if (asciiHeader.startsWith("#CAL2POK")) {
+      if (window.__rxBytes.length < 8) break;
+      consumeAsciiFrame(8);
+      continue;
+    }
+    if (asciiHeader.startsWith("#TARE")) {
+      if (window.__rxBytes.length < 5) break;
+      consumeAsciiFrame(5);
       continue;
     }
     // Exact-length gating for #PRS (20 triplets) to avoid waiting for the next '#'
@@ -1736,6 +1752,14 @@ function processReceivedString(rx_data) {
         updateSharedStatusBanner();
         startProbePolling();
       }
+      else if (rx_data == "#CAL2P") {
+        cal2pUiActive = true;
+        probeLockManual = false;
+        probeLockUntil = 0;
+        pressureScanLockManual = false;
+        pressureScanLockUntil = 0;
+        showTransientPressureBanner("Calibration running", 4000);
+      }
       else if (rx_data == "#PRBDONE") {
         probeUiActive = false;
         clearPressureScanSweep();
@@ -1743,6 +1767,10 @@ function processReceivedString(rx_data) {
         clearProbePollTimer();
         probeAwaitFinalFrame = true;
         writeOnCharacteristic("#RP&VS").catch(() => {});
+      }
+      else if (rx_data == "#CAL2POK") {
+        cal2pUiActive = false;
+        showTransientPressureBanner("Calibration complete", 4000);
       }
       if (rx_data.length == 8) {
         ledAction.style.visibility = 'visible';
@@ -2168,8 +2196,13 @@ function loadAndShowPVSData(receivedString) {
       finishPressureScan("Scan: updated", "done", 4000);
     } else if (probeAwaitFinalFrame) {
       applyCellPressures(pressures);
-      probeLockManual = !!mamActive;
-      probeLockUntil = probeLockManual ? 0 : (nowMs + PROBE_RESULT_HOLD_MS);
+      if (!cal2pUiActive) {
+        probeLockManual = !!mamActive;
+        probeLockUntil = probeLockManual ? 0 : (nowMs + PROBE_RESULT_HOLD_MS);
+      } else {
+        probeLockManual = false;
+        probeLockUntil = 0;
+      }
       probeAwaitFinalFrame = false;
     } else if (!pressureScanActive && !pressureScanLocked && !probeLocked) {
       applyCellPressures(pressures);
@@ -2757,7 +2790,7 @@ function saveSettings() {
   PRESSURE_FIRM = clampIntInRange(PRESSURE_FIRM, 32, 52);
   PRESSURE_SITTING = clampIntInRange(PRESSURE_SITTING, PRESSURE_FIRM, PRESSURE_FIRM + 20);
   PRESSURE_RELEASED = clampIntInRange(PRESSURE_RELEASED, 10, setStaticPressure);
-  PRESSURE_MAX = clampIntInRange(PRESSURE_MAX, 60, 120);
+  PRESSURE_MAX = clampIntInRange(PRESSURE_MAX, 60, 150);
   PRESSURE_HYSTERESIS = clampIntInRange(PRESSURE_HYSTERESIS, 0, 3);
 
   MIN_MATTRESS_TEMP_C = clampIntInRange(MIN_MATTRESS_TEMP_C, 22, 30);
@@ -3351,7 +3384,7 @@ function changeSliderSetting(setting) {
   else if (setting == "taPressureFirm") {PRESSURE_FIRM = clampIntInRange(v, 32, 52); el.value = String(PRESSURE_FIRM);}
   else if (setting == "taPressureSitting") {PRESSURE_SITTING = clampIntInRange(v, PRESSURE_FIRM, PRESSURE_FIRM + 20); el.value = String(PRESSURE_SITTING);}
   else if (setting == "taPressureReleased") {PRESSURE_RELEASED = clampIntInRange(v, 10, setStaticPressure + 10); el.value = String(PRESSURE_RELEASED);}
-  else if (setting == "taPressureMax") {PRESSURE_MAX = clampIntInRange(v, 60, 120); el.value = String(PRESSURE_MAX);}
+  else if (setting == "taPressureMax") {PRESSURE_MAX = clampIntInRange(v, 60, 150); el.value = String(PRESSURE_MAX);}
   else if (setting == "taPressureHysteresis") {PRESSURE_HYSTERESIS = clampIntInRange(v, 0, 3); el.value = String(PRESSURE_HYSTERESIS);}
   else if (setting == "taMinMattressTempC") {MIN_MATTRESS_TEMP_C = clampIntInRange(v, 22, 30); el.value = String(MIN_MATTRESS_TEMP_C);}
   else if (setting == "taMaxMattressTempC") {MAX_MATTRESS_TEMP_C = clampIntInRange(v, 25, 33); el.value = String(MAX_MATTRESS_TEMP_C);}
