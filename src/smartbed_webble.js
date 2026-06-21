@@ -1,5 +1,5 @@
 'use strict';  // Define JavaScript code should be executed in "strict mode"
-// Global variables
+// Global variables 
 let container;
 let longPressTimeout;
 let isLongPress = false;
