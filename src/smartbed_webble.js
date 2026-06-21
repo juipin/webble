@@ -1,5 +1,13 @@
 'use strict';  // Define JavaScript code should be executed in "strict mode"
-// Global variables 
+const MODEL_MINIMAL = !!(window.SMARTBED_MODEL && window.SMARTBED_MODEL.minimal);
+const MINIMAL_DEVELOPER_BUTTON_IDS = [
+  "btnPressureScan",
+  "btnProbePosture",
+  "btnClassifyPosture",
+  "btnTarePressure",
+  "btnCal2P"
+];
+// Global variables
 let container;
 let longPressTimeout;
 let isLongPress = false;
@@ -321,6 +329,87 @@ function setSummaryCell(rowIndex, cellIndex, value) {
 }
 // Background
 const modeSelect = document.getElementById('modeSelect');
+const workflowModeSelect = document.getElementById('workflowMode');
+const imgMattressDev = document.getElementById('imgMattressDev');
+const imgMattressUser = document.getElementById('imgMattressUser');
+function hideNode(el) {
+  if (el) el.style.display = "none";
+}
+function showNode(el) {
+  if (el) el.style.display = "";
+}
+function hideById(id) {
+  hideNode(document.getElementById(id));
+}
+function hideSettingForInput(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const row = el.closest('.settings-row');
+  if (row) row.style.display = "none";
+}
+function hideCheckboxSetting(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const row = el.closest('label');
+  if (row) row.style.display = "none";
+}
+function isDeveloperWorkflowActive() {
+  if (workflowModeSelect) return workflowModeSelect.value === "developer";
+  if (window.SmartbedUICommon && typeof window.SmartbedUICommon.getWorkflowMode === "function") {
+    return window.SmartbedUICommon.getWorkflowMode() === "developer";
+  }
+  return false;
+}
+function syncMinimalDeveloperButtons() {
+  const visible = MODEL_MINIMAL && isDeveloperWorkflowActive();
+  MINIMAL_DEVELOPER_BUTTON_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (visible) showNode(el);
+    else hideNode(el);
+  });
+}
+function applyModelMattressImages() {
+  const devSrc = MODEL_MINIMAL
+    ? "asset/bg_mattress_dev322x121_minimal.jpg"
+    : "asset/bg_mattress_dev322x121.jpg";
+  const userSrc = MODEL_MINIMAL
+    ? "asset/bg_mattress_user322x121_minimal.jpg"
+    : "asset/bg_mattress_user322x121.jpg";
+  if (imgMattressDev) imgMattressDev.src = devSrc;
+  if (imgMattressUser) imgMattressUser.src = userSrc;
+}
+function applyMinimalModelUi() {
+  applyModelMattressImages();
+  syncMinimalDeveloperButtons();
+  if (!MODEL_MINIMAL) return;
+  if (modeSelect && modeSelect.options && modeSelect.options.length > 3) {
+    modeSelect.options[3].disabled = true;
+    modeSelect.options[3].text = "Autoturn (N/A)";
+  }
+
+  hideNode(btnAutoturnA);
+  hideNode(btnAutoturnB);
+  hideNode(lblAutoTurn);
+  hideNode(document.getElementById("btnBagTurnL"));
+  hideNode(document.getElementById("btnBagTurnR"));
+  hideNode(document.getElementById("btnBagTurnStop"));
+  hideById("panelRight");
+  hideById("panelLeft");
+  hideById("lblPressureRight");
+  hideById("lblPressureLeft");
+  hideById("lblPressurePillow");
+  hideById("lblPressureSide");
+  hideById("lblTec");
+  hideById("lblTemp1");
+  hideById("lblTemp2");
+  hideById("lblRh1");
+  hideById("lblRh2");
+  hideCheckboxSetting("noPillowMassage");
+  hideSettingForInput("taAutoturnInterval");
+  hideSettingForInput("taNumberOfTurns");
+  hideSettingForInput("taSidebagFillInterval");
+}
 // BLE Connect
 const connectButton = document.getElementById('connectBleButton');
 const disconnectButton = document.getElementById('disconnectBleButton');
@@ -463,8 +552,9 @@ function updateSharedStatusBanner() {
 }
 
 function updateExecutionModeSelection(modeIndex) {
-  const idx = Number(modeIndex);
+  let idx = Number(modeIndex);
   if (!modeSelect || !Number.isFinite(idx) || idx < 0 || idx >= modeSelect.options.length) return;
+  if (MODEL_MINIMAL && idx === 3) idx = 4;
   modeSelect.selectedIndex = idx;
   executionMode = idx;
   executionModeText = modeSelect.options[idx].text;
@@ -673,6 +763,11 @@ const btnBagLegHold = document.getElementById('btnBagLegHold');
 const btnBagTurnL = document.getElementById('btnBagTurnL');
 const btnBagTurnR = document.getElementById('btnBagTurnR');
 const btnBagTurnStop = document.getElementById('btnBagTurnStop');
+const btnPressureScan = document.getElementById('btnPressureScan');
+const btnProbePosture = document.getElementById('btnProbePosture');
+const btnClassifyPosture = document.getElementById('btnClassifyPosture');
+const btnTarePressure = document.getElementById('btnTarePressure');
+const btnCal2P = document.getElementById('btnCal2P');
 let leftBagPressure = 0;
 let rightBagPressure = 0;
 let legBagPressure = 0;
@@ -705,11 +800,33 @@ if (btnBagLegHold) btnBagLegHold.addEventListener('click', () => triggerBagComma
 if (btnBagTurnL) btnBagTurnL.addEventListener('click', () => triggerBagCommand(getTurnLeftCommand()));
 if (btnBagTurnR) btnBagTurnR.addEventListener('click', () => triggerBagCommand(getTurnRightCommand()));
 if (btnBagTurnStop) btnBagTurnStop.addEventListener('click', () => triggerBagCommand("#HOLDB"));
+if (btnPressureScan) btnPressureScan.addEventListener('click', () => {
+  notePressureScanRequested();
+  writeOnCharacteristic("*PSCAN").catch(() => setPressureScanStatus("Scan: request failed", ""));
+});
+if (btnProbePosture) btnProbePosture.addEventListener('click', () => {
+  showTransientPressureBanner("Probe requested");
+  writeOnCharacteristic("*PROBE").catch(() => {});
+});
+if (btnClassifyPosture) btnClassifyPosture.addEventListener('click', () => {
+  showTransientPressureBanner("Classify requested");
+  writeOnCharacteristic("*CLASSIFY").catch(() => {});
+});
+if (btnTarePressure) btnTarePressure.addEventListener('click', () => {
+  showTransientPressureBanner("Tare requested");
+  writeOnCharacteristic("*TARE").catch(() => {});
+});
+if (btnCal2P) btnCal2P.addEventListener('click', () => {
+  showTransientPressureBanner("Cal 2P requested");
+  writeOnCharacteristic("*CAL2P").catch(() => {});
+});
 
 // Pressure Map
 const maxProbabilityLabel = document.getElementById('maxProbabilityLabel');
 const maxProbability = document.getElementById('maxProbability');
 const pressureMapCanvas = document.getElementById('pressureMapCanvas');
+applyMinimalModelUi();
+if (workflowModeSelect) workflowModeSelect.addEventListener('change', syncMinimalDeveloperButtons);
 const isPosturePressure = document.getElementById('isPosturePressure');
 const pmapViewMode = document.getElementById('pmapViewMode');
 let isPosturePressureChecked = !!(isPosturePressure && isPosturePressure.checked);
@@ -766,7 +883,7 @@ if ('ontouchstart' in window) {
   btnLeftTurn.addEventListener('touchstart', () => {longPressTimeout = setTimeout(() => {writeOnCharacteristic("#LTB30"); isLongPress = true;}, 500)});
   btnLeftTurn.addEventListener('touchend', () => {clearTimeout(longPressTimeout); if (isLongPress) isLongPress = false; else writeOnCharacteristic("#LTS"); });
   btnRightTurn.addEventListener('touchstart', () => {longPressTimeout = setTimeout(() => {writeOnCharacteristic("#RTB30"); isLongPress = true;}, 500)});
-  btnRightTurn.addEventListener('touchend', () => {clearTimeout(longPressTimeout); if (isLongPress) isLongPress = false; else rwiteOnCharacteristic("#RTS"); });
+  btnRightTurn.addEventListener('touchend', () => {clearTimeout(longPressTimeout); if (isLongPress) isLongPress = false; else writeOnCharacteristic("#RTS"); });
   btnBackUp.addEventListener('touchstart', () => {longPressTimeout = setTimeout(() => {writeOnCharacteristic("#BUB80"); isLongPress = true;}, 500)});
   btnBackUp.addEventListener('touchend', () => {clearTimeout(longPressTimeout); if (isLongPress) isLongPress = false; else writeOnCharacteristic("#BUS"); });
   btnBackDown.addEventListener('touchstart', () => {longPressTimeout = setTimeout(() => {writeOnCharacteristic("#BDB00"); isLongPress = true;}, 500)});
@@ -1486,6 +1603,10 @@ function disconnectDevice() {
 function runModeSelect() {
   if (!modeSelect) return;
   const requestedMode = modeSelect.selectedIndex;
+  if (MODEL_MINIMAL && requestedMode === 3) {
+    updateExecutionModeSelection(4);
+    return;
+  }
   if (requestedMode === 6) {
     updateExecutionModeSelection(6);
     updateManualModeState(true);
